@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Download, FileText, FileCode, Printer } from "lucide-react";
+import { Download, FileText, FileCode, Printer, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ReportRendererProps {
@@ -21,6 +21,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
 
   const handleDownloadTxt = () => {
     const plainText = report
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)")
       .replace(/\[\*\*([^*]+)\*\*\]/g, "[$1]")
       .replace(/#+\s?/g, "")
       .replace(/\*\*/g, "")
@@ -77,6 +78,14 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
               margin-bottom: 12px;
               font-size: 14px;
             }
+            a {
+              color: #4f46e5;
+              font-weight: 600;
+              text-decoration: underline;
+            }
+            a:hover {
+              color: #3730a3;
+            }
             table {
               width: 100%;
               border-collapse: collapse;
@@ -112,6 +121,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
             @media print {
               body { padding: 20px; }
               @page { margin: 1.5cm; }
+              a { color: #4f46e5 !important; text-decoration: underline !important; }
             }
           </style>
         </head>
@@ -250,30 +260,60 @@ function FormattedBlock({ text }: { text: string }) {
           return <TableRenderer key={i} tableMarkdown={block.content} />;
         }
 
-        const paragraphs = block.content.split("\n\n");
+        const blockText = block.content;
+
+        const hasNumberedList = /^\d+\.\s/m.test(blockText);
+        const hasBulletList = /^[*-]\s/m.test(blockText);
+
+        if (hasNumberedList) {
+          const rawItems = blockText
+            .split(/\n(?=\d+\.\s)/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          return (
+            <ol key={i} className="space-y-3 pl-5 list-decimal marker:text-indigo-400 marker:font-semibold">
+              {rawItems.map((rawItem, itemIdx) => {
+                const cleaned = rawItem.replace(/^\d+\.\s+/, "").trim();
+                return (
+                  <li key={itemIdx} className="leading-relaxed pl-1">
+                    <RichInlineText text={cleaned} />
+                  </li>
+                );
+              })}
+            </ol>
+          );
+        }
+
+        if (hasBulletList) {
+          const rawItems = blockText
+            .split(/\n(?=[*-]\s)/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          return (
+            <ul key={i} className="space-y-1.5 pl-4 list-disc marker:text-zinc-400">
+              {rawItems.map((rawItem, itemIdx) => {
+                const cleaned = rawItem.replace(/^[*-]\s+/, "").trim();
+                return (
+                  <li key={itemIdx} className="leading-relaxed">
+                    <RichInlineText text={cleaned} />
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        }
+
+        const paragraphs = blockText.split("\n\n");
         return (
           <React.Fragment key={i}>
             {paragraphs.map((p, pIdx) => {
               const cleanP = p.trim();
               if (!cleanP) return null;
-              if (cleanP.match(/^(---|---|\|\-\-+|\*\*\*)$/)) return null;
-
-              if (cleanP.startsWith("- ") || cleanP.startsWith("* ") || cleanP.match(/^\d+\.\s/)) {
-                const items = cleanP.split("\n").filter((l) => l.trim() && !l.trim().match(/^(---|---|\|\-\-+|\*\*\*)$/));
-                return (
-                  <ul key={pIdx} className="space-y-1.5 pl-4 list-disc marker:text-zinc-400">
-                    {items.map((item, itemIdx) => (
-                      <li key={itemIdx}>
-                        <RichInlineText text={item.replace(/^[-*\d.]+\s*/, "")} />
-                      </li>
-                    ))}
-                  </ul>
-                );
-              }
+              if (cleanP.match(/^(---|---|-{3,}|\|\-\-+|\*\*\*)$/)) return null;
 
               return (
                 <p key={pIdx} className="leading-relaxed">
-                  <RichInlineText text={cleanP} />
+                  <RichInlineText text={cleanP.replace(/\n/g, " ")} />
                 </p>
               );
             })}
@@ -334,32 +374,76 @@ function RichInlineText({ text }: { text: string }) {
   if (!text) return null;
 
   const cleaned = text.replace(/^#+\s*/, "");
-  const parts = cleaned.split(/(\*\*[^*]+\*\*|\[[^\]]+\])/g);
 
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <strong key={i} className="font-semibold text-zinc-900 dark:text-zinc-100">
-              {part.slice(2, -2)}
-            </strong>
-          );
-        } else if (part.startsWith("[") && part.endsWith("]") && part.length > 3) {
-          const cleanCitationText = part.slice(1, -1).replace(/\*\*/g, "").trim();
-          return (
-            <span
-              key={i}
-              className="inline border border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium leading-normal mx-0.5 break-words"
-            >
-              [{cleanCitationText}]
-            </span>
-          );
-        }
-        return <span key={i}>{part}</span>;
-      })}
-    </>
-  );
+  const TOKEN_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\])/g;
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = TOKEN_RE.exec(cleaned)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push(<span key={lastIndex}>{cleaned.slice(lastIndex, m.index)}</span>);
+    }
+
+    const full = m[0];
+    const key = m.index;
+
+    if (m[3] !== undefined) {
+      const linkText = m[2];
+      const linkUrl = m[3];
+      const isHttpUrl = linkUrl.startsWith("http");
+      if (isHttpUrl) {
+        parts.push(
+          <a
+            key={key}
+            href={linkUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-xs transition-colors my-0.5 mx-0.5"
+            title={`Open paper in a new tab`}
+          >
+            <span>{linkText}</span>
+            <ExternalLink className="w-3 h-3 inline shrink-0 text-indigo-500" />
+          </a>
+        );
+      } else {
+        parts.push(<span key={key}>{full}</span>);
+      }
+    } else if (m[4] !== undefined) {
+      parts.push(
+        <strong key={key} className="font-semibold text-zinc-900 dark:text-zinc-100">
+          {m[4]}
+        </strong>
+      );
+    } else if (m[5] !== undefined) {
+      parts.push(
+        <em key={key} className="italic text-zinc-700 dark:text-zinc-300">
+          {m[5]}
+        </em>
+      );
+    } else if (m[6] !== undefined && m[6].length > 1) {
+      const cleanCitationText = m[6].replace(/\*\*/g, "").trim();
+      parts.push(
+        <span
+          key={key}
+          className="inline border border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium leading-normal mx-0.5 break-words"
+        >
+          [{cleanCitationText}]
+        </span>
+      );
+    } else {
+      parts.push(<span key={key}>{full}</span>);
+    }
+
+    lastIndex = m.index + full.length;
+  }
+
+  if (lastIndex < cleaned.length) {
+    parts.push(<span key={lastIndex + "end"}>{cleaned.slice(lastIndex)}</span>);
+  }
+
+  return <>{parts}</>;
 }
 
 function renderMarkdownToHtmlString(markdown: string): string {
@@ -370,6 +454,7 @@ function renderMarkdownToHtmlString(markdown: string): string {
     .replace(/^##\s+(.+)$/gm, "<h2>$1</h2>")
     .replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">$1 &#x2197;</a>')
     .replace(/\[([^\]]+)\]/g, '<span class="citation">[$1]</span>');
 
   const lines = html.split("\n");

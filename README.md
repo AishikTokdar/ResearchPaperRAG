@@ -30,7 +30,7 @@ The platform incorporates an interactive Research Gap Analyzer SPA powered by a 
 7. Local Quickstart & Execution Guide
 8. Production Deployment with Gunicorn & Uvicorn
 9. Docker & Containerization Guide
-10. Cloud Deployment Options (Hugging Face, Vercel, Render)
+10. Cloud Deployment Options (Hugging Face Spaces Backend & Vercel Frontend)
 11. REST API Reference & OpenAPI Specification
 12. Troubleshooting & FAQs
 13. Tech Stack Summary
@@ -52,8 +52,8 @@ ResearchPaperRAG conducts concurrent, real-time searches across 6 open-access li
 ### 2. Strict 3-Year Publication Window (2024–2026)
 Research results are automatically validated against publication dates and filtered strictly to the current date's 3-year publication window (2024, 2025, 2026). This filters out outdated methodologies and forces the gap analysis engine to focus exclusively on contemporary state-of-the-art research.
 
-### 3. Max 3-Paper Focused RAG Knowledge Base
-To eliminate context window dilution and hallucination, the system enforces a maximum 3-paper selection limit per gap analysis run. Users can select any combination of top-retrieved papers or attach custom PDF files up to 50 MB cumulative size.
+### 3. Max 5-Paper Focused RAG Knowledge Base
+Users can select up to 5 research papers (or attach custom PDF files up to 50 MB cumulative size) per gap analysis run, expanding multi-document synthesis while maintaining high-precision context retrieval.
 
 ### 4. Direct New-Tab Paper Access
 Every fetched paper in the interactive search list includes direct external links (url / pdf_url / doi). Clicking any paper card immediately opens the original publisher document or PDF in a new browser tab.
@@ -99,7 +99,7 @@ When papers are ingested, ResearchPaperRAG executes cross-document retrieval and
   +---------------------------------------------------------------------------------------------+
   |  - Multi-Source Search Bar (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ)      |
   |  - 3-Year Date Filter (Strict 2024–2026 publication validation)                             |
-  |  - Max 3-Paper Selection checklist & PDF drag-and-drop file dropzone                       |
+  |  - Max 5-Paper Selection checklist & PDF drag-and-drop file dropzone                       |
   |  - Internal Model Selector Dropdown & "Save Model" Action Bar                              |
   |  - 8-Layer Structured Report Card Renderer                                                   |
   |  - Compact Inline Citation Badge Normalizer ([Paper Title, Year, Section])                   |
@@ -375,23 +375,76 @@ docker run -d \
 
 ## Cloud Deployment Options
 
-### Option 1: Hugging Face Spaces (Free CPU Basic 16GB RAM)
-Hugging Face Spaces provides a 100% FREE tier with 16 GB RAM, making it ideal for running local PyTorch CPU embeddings.
+### Part A: Backend Deployment on Hugging Face Spaces (ZeroGPU Option)
 
-1. Create a new Space on Hugging Face (https://huggingface.co/new-space).
-2. SDK: Gradio.
-3. Hardware: CPU Basic 2 vCPU 16 GB RAM (Free).
-4. Upload all files from backend/ into the Space repository.
-5. Under Space Settings -> Variables and Secrets, add your GROQ_API_KEY or GOOGLE_API_KEY.
-6. Hugging Face will automatically launch the service and expose REST endpoints.
+Deploying the Python FastAPI backend on Hugging Face Spaces provides free hosting with hardware acceleration options (ZeroGPU or CPU Basic 16 GB RAM).
 
-### Option 2: Decoupled Vercel (Frontend) + Hugging Face (Backend)
-1. Deploy backend to Hugging Face Spaces (Option 1 above).
-2. Note your Space's URL: https://YOUR_USERNAME-space-name.hf.space.
-3. Import your repository into Vercel (https://vercel.com/).
-4. Set Root Directory: frontend.
-5. Set Environment Variable: VITE_API_BASE_URL = https://YOUR_USERNAME-space-name.hf.space.
-6. Deploy. Vercel will distribute the React SPA globally across edge CDNs.
+#### Step-by-Step Instructions:
+
+1. **Create a New Space**:
+   - Go to [Hugging Face Spaces](https://huggingface.co/new-space).
+   - Enter Space Name: `researchpaperrag-backend`.
+   - License: Select **MIT**.
+   - SDK: Select **Gradio** (or Docker).
+   - Hardware: Select **ZeroGPU** (or **CPU Basic 2 vCPU 16 GB RAM** free tier).
+
+2. **Upload Repository Files**:
+   - Push or upload all contents from the `backend/` folder into the root directory of your Hugging Face Space repository (`app.py`, `requirements.txt`, `app/` folder, etc.).
+
+3. **Configure Backend Environment Variables & Secrets**:
+   In your Hugging Face Space dashboard, navigate to **Settings -> Secrets and Variables**:
+   
+   - **Repository Secrets** (Add your API keys securely):
+     - `GROQ_API_KEY`: Your Groq Cloud API key (`gsk_...`)
+     - `GOOGLE_API_KEY`: Your Google Gemini API key (`AIzaSy...`)
+     - `OPENROUTER_API_KEY`: Your OpenRouter API key (`sk-or-v1-...`)
+     - `CEREBRAS_API_KEY`: Your Cerebras Cloud API key
+     - `SAMBANOVA_API_KEY`: Your SambaNova Cloud API key
+     - `HF_API_KEY`: Your Hugging Face user access token (`hf_...`)
+
+   - **Variables** (Add public runtime configuration):
+     - `DEFAULT_PROVIDER`: `groq`
+     - `DEFAULT_MODEL`: `llama-3.3-70b-versatile`
+     - `ENVIRONMENT`: `production`
+     - `CORS_ORIGINS`: `*` (or your deployed Vercel URL)
+
+4. **Verify Deployment & Obtain Public URL**:
+   - Once Hugging Face finishes building the Space, the FastAPI backend will be live.
+   - Copy your Space's public HTTPS URL from the Space header (e.g. `https://YOUR_USERNAME-researchpaperrag-backend.hf.space`).
+   - Verify health by opening `https://YOUR_USERNAME-researchpaperrag-backend.hf.space/health` or `/docs` in your browser.
+
+---
+
+### Part B: Frontend Deployment on Vercel
+
+Deploying the React 18 SPA frontend on Vercel distributes your user interface across global edge CDNs.
+
+#### Step-by-Step Instructions:
+
+1. **Create Vercel Project**:
+   - Log in to your [Vercel Dashboard](https://vercel.com/) and click **Add New... -> Project**.
+   - Import your `ResearchPaperRAG` GitHub repository.
+
+2. **Configure Build Settings**:
+   - **Framework Preset**: Select **Vite**.
+   - **Root Directory**: Click edit and select `frontend`.
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+
+3. **Configure Frontend Environment Variables**:
+   In the Vercel project deployment screen, expand **Environment Variables**:
+   
+   - **Key**: `VITE_API_BASE_URL`
+   - **Value**: `https://YOUR_USERNAME-researchpaperrag-backend.hf.space` *(Replace with the Hugging Face Space URL obtained in Part A)*
+
+4. **Deploy**:
+   - Click **Deploy**.
+   - Vercel will build the frontend assets, compile TypeScript, and publish your production site to a custom URL (e.g. `https://research-paper-rag.vercel.app`).
+
+5. **Test Full-Stack Connection**:
+   - Open your Vercel URL in your browser.
+   - Navigate to `/chat` and execute a topic search across academic APIs.
+   - The React app will make REST API calls to your Hugging Face Space backend, synthesize 8-layer gap reports, and run grounded follow-up chat.
 
 ---
 

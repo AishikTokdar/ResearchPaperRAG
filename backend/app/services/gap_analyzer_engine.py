@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 from typing import List, Dict, Any, Optional, Tuple
 from langchain_core.documents import Document
@@ -56,13 +57,13 @@ class GapAnalyzerEngine:
         self.initialize_session()
         all_docs: List[Document] = []
 
-        capped_fetched = fetched_papers_with_text[:3]
+        capped_fetched = fetched_papers_with_text[:5]
         for paper, full_text in capped_fetched:
             self.paper_metadata_list.append(paper)
             title = paper.get("title", "Untitled Paper")
             authors = paper.get("authors", "Unknown")
             year = paper.get("year", "N/A")
-            source = paper.get("url") or paper.get("source_api") or "API Search"
+            source_url = paper.get("url") or paper.get("pdf_url") or paper.get("source_api") or "API Search"
 
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             raw_doc = Document(
@@ -71,7 +72,7 @@ class GapAnalyzerEngine:
                     "paper_title": title,
                     "authors": authors,
                     "year": year,
-                    "source": source,
+                    "source": source_url,
                     "type": "fetched",
                 }
             )
@@ -80,8 +81,8 @@ class GapAnalyzerEngine:
                 chunk.metadata["section"] = f"Chunk {i+1}"
             all_docs.extend(chunks)
 
-        if uploaded_pdf_files and len(capped_fetched) < 3:
-            remaining_slots = 3 - len(capped_fetched)
+        if uploaded_pdf_files and len(capped_fetched) < 5:
+            remaining_slots = 5 - len(capped_fetched)
             capped_uploads = uploaded_pdf_files[:remaining_slots]
             for filename, file_bytes in capped_uploads:
                 title = filename.rsplit(".", 1)[0]
@@ -154,6 +155,7 @@ class GapAnalyzerEngine:
                 api_key=key or "placeholder",
                 model=model_name or "llama-3.3-70b-versatile",
                 temperature=0.2,
+                max_tokens=8192,
             )
         elif provider == "openrouter":
             key = api_key or os.getenv("OPENROUTER_API_KEY")
@@ -162,6 +164,7 @@ class GapAnalyzerEngine:
                 api_key=key or "placeholder",
                 model=model_name or "meta-llama/llama-3.3-70b-instruct:free",
                 temperature=0.2,
+                max_tokens=8192,
             )
         elif provider == "cerebras":
             key = api_key or os.getenv("CEREBRAS_API_KEY")
@@ -170,6 +173,7 @@ class GapAnalyzerEngine:
                 api_key=key or "placeholder",
                 model=model_name or "llama3.3-70b",
                 temperature=0.2,
+                max_tokens=8192,
             )
         elif provider == "sambanova":
             key = api_key or os.getenv("SAMBANOVA_API_KEY")
@@ -178,6 +182,7 @@ class GapAnalyzerEngine:
                 api_key=key or "placeholder",
                 model=model_name or "Meta-Llama-3.3-70B-Instruct",
                 temperature=0.2,
+                max_tokens=8192,
             )
         elif provider == "huggingface":
             key = api_key or os.getenv("HF_API_KEY")
@@ -186,6 +191,7 @@ class GapAnalyzerEngine:
                 api_key=key or "placeholder",
                 model=model_name or "meta-llama/Meta-Llama-3-8B-Instruct",
                 temperature=0.2,
+                max_tokens=8192,
             )
         elif provider == "ollama":
             ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -194,6 +200,7 @@ class GapAnalyzerEngine:
                 api_key="ollama",
                 model=model_name or "mistral",
                 temperature=0.2,
+                max_tokens=8192,
             )
         else:
             key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -202,6 +209,7 @@ class GapAnalyzerEngine:
                 api_key=key or "placeholder",
                 model=model_name or "gemini-3.6-flash",
                 temperature=0.2,
+                max_tokens=8192,
             )
 
     def generate_gap_report(
@@ -216,7 +224,7 @@ class GapAnalyzerEngine:
 
         llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
 
-        retriever = self.vector_store.as_retriever(search_kwargs={"k": 12})
+        retriever = self.vector_store.as_retriever(search_kwargs={"k": 8})
         retrieved_docs = retriever.invoke(f"Research gaps trends methods limitations contradictions for {topic}")
 
         formatted_context_items = []
@@ -224,8 +232,9 @@ class GapAnalyzerEngine:
             paper_title = d.metadata.get("paper_title", "Unknown")
             section = d.metadata.get("section", "Section N/A")
             year = d.metadata.get("year", "")
+            url = d.metadata.get("source", "") or d.metadata.get("url", "")
             formatted_context_items.append(
-                f"[Source: {paper_title} ({year}) | {section}]\n{d.page_content.strip()}"
+                f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()}"
             )
         formatted_context = "\n\n".join(formatted_context_items)
 
@@ -262,7 +271,9 @@ Propose 2 to 3 novel, concrete, and actionable student or researcher paper proje
 
 RULES:
 - Maintain a clean, academic tone. Do NOT include any emojis or casual symbols.
-- Every claim in sections 1-7 MUST include explicit citations formatted as `[Paper Title, Year, Section]`.
+- EVERY research paper citation in sections 1-7 MUST be formatted as a hyperlinked Markdown title: `[Paper Title, Year](URL)`. Use the exact URL provided in the paper source context.
+- Example citation: `[Attention Is All You Need, 2024](https://arxiv.org/abs/1706.03762)`.
+- Clicking the paper name must open the original research paper link in a new tab.
 - Provide concrete technical details rather than vague generalities.
 
 ---
@@ -275,6 +286,15 @@ RETRIEVED MULTI-PAPER CONTEXT:
 
         try:
             report = chain.invoke({"topic": topic, "context": formatted_context})
+
+            for p in self.paper_metadata_list:
+                title = p.get("title", "").strip()
+                url = p.get("url") or p.get("pdf_url") or ""
+                if title and url and len(title) > 4:
+                    escaped_title = re.escape(title)
+                    pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
+                    report = re.sub(pattern_bracket, rf'[\1]({url})', report)
+
             return report
         except Exception as e:
             return f"Error generating research gap report: {str(e)}"
@@ -294,22 +314,25 @@ RETRIEVED MULTI-PAPER CONTEXT:
 
         prompt_template = """You are a research assistant answering follow-up questions about the analyzed research papers.
 Answer the user's question using ONLY the provided multi-paper context. Always cite the paper title and section for your statements.
-If the context does not contain the answer, state that clearly.
+If a paper has a URL, format the paper title citation as a hyperlinked Markdown link: `[Paper Title](URL)`.
 
 Context:
 {context}
 
 Question: {question}
 
-Answer (with exact source citations):"""
+Answer (with exact source citations and paper hyperlinks):"""
 
         prompt = ChatPromptTemplate.from_template(prompt_template)
 
         def format_docs(docs):
-            return "\n\n".join(
-                f"[Source: {d.metadata.get('paper_title', 'Paper')} | {d.metadata.get('section', 'Section')}]\n{d.page_content}"
-                for d in docs
-            )
+            formatted = []
+            for d in docs:
+                p_title = d.metadata.get('paper_title', 'Paper')
+                p_sec = d.metadata.get('section', 'Section')
+                p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
+                formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content}")
+            return "\n\n".join(formatted)
 
         rag_chain = (
             {"context": retriever | format_docs, "question": RunnablePassthrough()}
@@ -319,6 +342,16 @@ Answer (with exact source citations):"""
         )
 
         try:
-            return rag_chain.invoke(question)
+            answer = rag_chain.invoke(question)
+
+            for p in self.paper_metadata_list:
+                title = p.get("title", "").strip()
+                url = p.get("url") or p.get("pdf_url") or ""
+                if title and url and len(title) > 4:
+                    escaped_title = re.escape(title)
+                    pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
+                    answer = re.sub(pattern_bracket, rf'[\1]({url})', answer)
+
+            return answer
         except Exception as e:
             return f"Error answering question: {str(e)}"

@@ -74,9 +74,9 @@ export const FEATURES = [
       "Automatically filters search results to recent publications from the last 3 years (2024–2026) for cutting-edge literature discovery.",
   },
   {
-    title: "Max 3-Paper Deep Synthesis",
+    title: "Max 5-Paper Deep Synthesis",
     description:
-      "Select up to 3 research papers (or attach custom PDFs) for focused, high-precision cross-document RAG analysis.",
+      "Select up to 5 research papers (or attach custom PDFs) for focused, high-precision cross-document RAG analysis.",
   },
   {
     title: "8-Layer LLM Research Analysis",
@@ -121,7 +121,7 @@ export const HOW_IT_WORKS_STEPS = [
     step: 2,
     title: "Select Papers & Build Knowledge Base",
     description:
-      "Select up to 3 top research papers or upload your own custom PDFs to form the active multi-document knowledge base.",
+      "Select up to 5 top research papers or upload your own custom PDFs to form the active multi-document knowledge base.",
   },
   {
     step: 3,

@@ -50,7 +50,7 @@ async def ingest_papers(
     req: IngestPapersRequest
 ):
     try:
-        selected_papers = req.fetched_papers[:3]
+        selected_papers = req.fetched_papers[:5]
         fetched_with_text = []
         for paper in selected_papers:
             full_text = fetcher.download_and_extract_text(paper)

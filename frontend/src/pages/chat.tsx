@@ -36,7 +36,7 @@ interface ChatMessageItem {
   text: string;
 }
 
-const MAX_SELECTED_PAPERS = 3;
+const MAX_SELECTED_PAPERS = 5;
 const CURRENT_YEAR = 2026;
 const MIN_YEAR = CURRENT_YEAR - 2;
 
@@ -171,9 +171,9 @@ export function ChatPage() {
     });
   };
 
-  const selectTopThree = () => {
-    const topThree = fetchedPapers.slice(0, MAX_SELECTED_PAPERS).map((p) => p.id);
-    setSelectedPaperIds(new Set(topThree));
+  const selectTopFive = () => {
+    const topFive = fetchedPapers.slice(0, MAX_SELECTED_PAPERS).map((p) => p.id);
+    setSelectedPaperIds(new Set(topFive));
   };
 
   const deselectAll = () => {
@@ -290,7 +290,7 @@ export function ChatPage() {
             Research Gap Analyzer
           </h1>
           <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto text-sm sm:text-base">
-            Search 6 free academic sources (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ), filter recent 3-year publications, select up to 3 papers, and synthesize structured 8-layer research insights.
+            Search 6 free academic sources (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ), filter recent 3-year publications, select up to 5 papers, and synthesize structured 8-layer research insights.
           </p>
         </div>
 
@@ -408,8 +408,8 @@ export function ChatPage() {
                     <div className="flex items-center justify-between text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                       <span>Fetched Papers ({fetchedPapers.length})</span>
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={selectTopThree} className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
-                          Select Top 3
+                        <button type="button" onClick={selectTopFive} className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
+                          Select Top 5
                         </button>
                         <span>|</span>
                         <button type="button" onClick={deselectAll} className="text-zinc-400 hover:underline">
@@ -510,7 +510,7 @@ export function ChatPage() {
                   <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                     Click or drag & drop PDF papers
                   </p>
-                  <p className="text-xs text-zinc-400 mt-1">Maximum 3 documents for analysis</p>
+                  <p className="text-xs text-zinc-400 mt-1">Maximum 5 documents for analysis</p>
                 </div>
 
                 {uploadedFiles.length > 0 && (
@@ -597,7 +597,7 @@ export function ChatPage() {
                   <BookOpen className="w-10 h-10 stroke-1 text-indigo-500 opacity-40" />
                   <p className="text-sm font-medium">No analysis generated yet.</p>
                   <p className="text-xs text-zinc-500 max-w-md">
-                    Search academic sources, select up to 3 research papers from the last 3 years, and click &ldquo;Run Multi-Paper Gap Analysis&rdquo;.
+                    Search academic sources, select up to 5 research papers from the last 3 years, and click &ldquo;Run Multi-Paper Gap Analysis&rdquo;.
                   </p>
                 </div>
               )}
