@@ -1,4 +1,4 @@
-import { Globe, Zap, Sparkles, Library, Cpu, Layers } from "lucide-react";
+import { Globe, Sparkles, Library, Cpu, Layers, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SpotlightCard } from "@/components/ui/spotlight-card";
 import { Badge } from "@/components/ui/badge";
@@ -14,45 +14,45 @@ type ProviderBlock = {
 
 const providers: ProviderBlock[] = [
   {
-    name: "Google Gemini (Free)",
-    icon: Sparkles,
+    name: "Groq LPU (Primary Free)",
+    icon: Zap,
     description: "Free tier via Google AI Studio — Gemini 2.5 Flash, Flash-Lite, Pro, and 2.0 Flash.",
-    models: ["Gemini 2.5 Flash", "Gemini 2.5 Flash-Lite", "Gemini 2.5 Pro", "Gemini 2.0 Flash"],
-    badge: "Primary Free",
+    models: ["GPT-OSS 120B", "GPT-OSS 20B", "Qwen 3.6 27B"],
+    badge: "Primary",
   },
   {
-    name: "Groq LPU (Free)",
-    icon: Zap,
-    description: "Free ultra-fast inference on Groq Cloud LPU hardware.",
-    models: ["Llama 3.3 70B", "Llama 3.1 8B", "Mixtral 8x7B", "DeepSeek R1 70B"],
-    badge: "Fast Free",
+    name: "Google Gemini (Second)",
+    icon: Sparkles,
+    description: "Second-choice fallback via Google AI Studio's free tier.",
+    models: ["Gemini 3.6 Flash", "Gemini 3.5 Flash", "Gemini 3.5 Flash-Lite", "Gemini 3.1 Flash-Lite"],
+    badge: "Second Choice",
   },
   {
     name: "Cerebras (Free)",
     icon: Cpu,
     description: "Free 2000+ tokens/sec inference on Cerebras Wafer-Scale Engine.",
-    models: ["Llama 3.3 70B", "Llama 3.1 8B"],
+    models: ["GPT-OSS 120B", "Gemma 4 31B", "Qwen 3 32B"],
     badge: "Ultra Fast",
   },
   {
     name: "SambaNova (Free)",
     icon: Layers,
     description: "Free Cloud inference powered by SambaNova SN40L reconfigurable chips.",
-    models: ["Llama 3.3 70B", "DeepSeek R1 70B", "Qwen 2.5 72B"],
+    models: ["DeepSeek V3", "DeepSeek R1", "Llama 4 Maverick", "Llama 4 Scout"],
     badge: "High Speed",
   },
   {
     name: "Hugging Face (Free)",
     icon: Library,
     description: "Free serverless open-weight models via Hugging Face router.",
-    models: ["Mistral 7B", "Zephyr 7B", "Llama 3 8B", "Qwen 2.5 Coder"],
+    models: ["Gemma 4 31B", "GPT-OSS 120B", "Qwen 3.5 27B"],
     badge: "Free Router",
   },
   {
     name: "OpenRouter (Free Tier)",
     icon: Globe,
     description: "100% free-tier zero-credit models via OpenRouter.",
-    models: ["Llama 3.3 70B Free", "Gemini 2.0 Flash Free", "DeepSeek R1 Free", "Qwen 2.5 72B Free"],
+    models: ["GPT-OSS 120B Free", "Gemini 3.1 Flash-Lite Free", "GLM 4.7 Free", "Auto Free Router"],
     badge: "Free Tier",
   },
 ];

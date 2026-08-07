@@ -44,7 +44,7 @@ import { getChatEntryReactKey } from "@/lib/chat-history";
 import { ConfirmAlertDialog } from "@/components/ui/confirm-alert-dialog";
 import { SESSION_INDEX_RETENTION_DAYS } from "@/lib/session-retention";
 
-const DEFAULT_CHAT_MODEL_ID = "gemini-2.5-flash";
+const DEFAULT_CHAT_MODEL_ID = "openai/gpt-oss-120b";
 
 function exportAsTXT(chatHistory: ChatEntry[], activeSessionName?: string) {
   if (chatHistory.length === 0) return;

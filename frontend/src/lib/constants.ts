@@ -8,6 +8,10 @@ export const API_ENDPOINTS = {
   ASK_STREAM: "/ask/stream",
   MODELS: "/models",
   RUNTIME_SUMMARY: "/runtime-summary",
+  PAPER_SEARCH: "/api/papers/search",
+  PAPER_INGEST: "/api/papers/ingest",
+  ANALYZE_GAPS: "/api/analyze/gaps",
+  CHAT_FOLLOWUP: "/api/chat/followup",
 } as const;
 
 export const APP_CONFIG = {
@@ -49,8 +53,7 @@ export const SUPPORTED_FILE_TYPES = {
 
 export const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/chat", label: "Chat" },
-  { href: "/about", label: "About" },
+  { href: "/chat", label: "Start Chat" },
 ] as const;
 
 export const SOCIAL_LINKS = {
@@ -61,75 +64,76 @@ export const SOCIAL_LINKS = {
 
 export const FEATURES = [
   {
-    title: "PDF Analysis",
+    title: "6 Free Academic Search APIs",
     description:
-      "Upload any PDF document and let AI understand its content through advanced text extraction and chunking.",
+      "Simultaneous real-time paper retrieval across arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed (Healthcare), and DOAJ.",
   },
   {
-    title: "Smart Retrieval",
+    title: "Strict 3-Year Publication Window",
     description:
-      "Using FAISS vector store and embeddings, we find the most relevant sections for your questions.",
+      "Automatically filters search results to recent publications from the last 3 years (2024–2026) for cutting-edge literature discovery.",
   },
   {
-    title: "AI-Powered Answers",
+    title: "Max 3-Paper Deep Synthesis",
     description:
-      "Get accurate answers powered by state-of-the-art language models through OpenRouter API.",
+      "Select up to 3 research papers (or attach custom PDFs) for focused, high-precision cross-document RAG analysis.",
   },
   {
-    title: "Multi-Model Support",
+    title: "8-Layer LLM Research Analysis",
     description:
-      "Choose from 10+ AI models across OpenRouter, Groq, Gemini, HuggingFace, and direct OpenAI.",
+      "Synthesizes Literature Summary, Trend Detection, Common Methods, Limitations, Contradictions, Research Gaps, Future Directions, and Novel Paper Suggestions.",
   },
   {
-    title: "7-Agent Pipeline",
+    title: "Grounded Interactive Chat",
     description:
-      "Production-grade multi-agent architecture: Extractor, Analyzer, Preprocessor, Optimizer, Synthesizer, Validator, and Assembler.",
+      "Ask follow-up questions strictly grounded in the ingested literature with exact source paper and section citations.",
   },
   {
-    title: "Real-time Streaming",
+    title: "Multi-Format Export (.pdf, .md, .txt)",
     description:
-      "Watch answers appear token-by-token via Server-Sent Events with a blinking cursor animation.",
+      "Export structured gap reports instantly into clean PDF print documents, raw Markdown, or plain text files.",
   },
   {
-    title: "5-Provider Failover",
+    title: "6 Free AI Cloud Providers",
     description:
-      "Automatic ordered failover across OpenRouter, Groq, Gemini, HuggingFace, and OpenAI.",
+      "Powered by free AI cloud providers: Groq LPU, Google Gemini, OpenRouter, Cerebras, SambaNova, and Hugging Face.",
   },
   {
-    title: "Source Citations",
+    title: "Chroma & FAISS Vector Indexing",
     description:
-      "Toggle source display to see exactly which PDF pages contributed to each answer.",
+      "Automated PDF text layer extraction, sentence-transformer embeddings, and local vector database indexing.",
   },
   {
-    title: "FAISS Persistence",
+    title: "New-Tab Paper Access",
     description:
-      "Vector index saved to disk automatically — restart the server without re-uploading PDFs.",
-  },
-  {
-    title: "Docker Deployable",
-    description:
-      "Production Dockerfile with non-root user, health checks, and Vercel-ready frontend configuration.",
+      "Direct external links for every fetched research result to open original publisher PDFs and DOIs in a new browser tab.",
   },
 ] as const;
 
 export const HOW_IT_WORKS_STEPS = [
   {
     step: 1,
-    title: "Upload Your PDF",
+    title: "Query Academic Literature",
     description:
-      "Simply drag and drop or select a PDF file. Our system processes it in seconds.",
+      "Enter any research topic or question. The platform searches 6 free academic sources and filters papers from 2024–2026.",
   },
   {
     step: 2,
-    title: "AI Processes Content",
+    title: "Select Papers & Build Knowledge Base",
     description:
-      "The document is split into chunks, converted to embeddings, and stored in a vector database.",
+      "Select up to 3 top research papers or upload your own custom PDFs to form the active multi-document knowledge base.",
   },
   {
     step: 3,
-    title: "Ask Questions",
+    title: "Automated RAG Vector Processing",
     description:
-      "Type your questions and get accurate answers based on the document content.",
+      "Documents are validated, chunked, vectorized using MiniLM embeddings, and indexed into local vector databases.",
+  },
+  {
+    step: 4,
+    title: "Synthesize 8-Layer Report & Chat",
+    description:
+      "The LLM generates a structured 8-layer gap report with citations, ready for grounded follow-up chat and export.",
   },
 ] as const;
 

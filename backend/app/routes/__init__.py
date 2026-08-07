@@ -8,6 +8,7 @@ a URL prefix, so paths are exactly ``/upload``, ``/ask``, etc.
 """
 
 from .chat import router as chat_router
+from .gap_analyzer import router as gap_analyzer_router
 from .health import router as health_router
 from .runtime_summary import router as runtime_summary_router
 from .tunnel import router as tunnel_router
@@ -19,4 +20,5 @@ __all__ = [
     "upload_router",
     "chat_router",
     "tunnel_router",
+    "gap_analyzer_router",
 ]

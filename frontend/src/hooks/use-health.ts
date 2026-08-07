@@ -1,12 +1,3 @@
-/**
- * useHealth Hook
- *
- * Periodically polls the backend /health endpoint and exposes
- * the connection status so the UI can show a live indicator.
- *
- * Uses plain ``fetch`` (no session header) because ``/health`` is intentionally public.
- */
-
 import * as React from "react";
 import { joinApiUrl } from "@/lib/constants";
 
@@ -16,10 +7,12 @@ interface UseHealthReturn {
   status: HealthStatus;
 }
 
-const POLL_INTERVAL_MS = 15_000;
+const POLL_INTERVAL_MS = 12_000;
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 export function useHealth(): UseHealthReturn {
   const [status, setStatus] = React.useState<HealthStatus>("checking");
+  const consecutiveFailuresRef = React.useRef<number>(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -27,11 +20,26 @@ export function useHealth(): UseHealthReturn {
     const check = async () => {
       try {
         const res = await fetch(joinApiUrl("/health"), {
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(12000),
         });
-        if (!cancelled) setStatus(res.ok ? "connected" : "disconnected");
+        if (!cancelled) {
+          if (res.ok) {
+            consecutiveFailuresRef.current = 0;
+            setStatus("connected");
+          } else {
+            consecutiveFailuresRef.current += 1;
+            if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+              setStatus("disconnected");
+            }
+          }
+        }
       } catch {
-        if (!cancelled) setStatus("disconnected");
+        if (!cancelled) {
+          consecutiveFailuresRef.current += 1;
+          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+            setStatus("disconnected");
+          }
+        }
       }
     };
 

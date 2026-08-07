@@ -6,7 +6,6 @@ import { ChatProvider } from "@/context/chat-context";
 import { ScrollToTop } from "@/components/layout/scroll-to-top";
 import { HomePage } from "@/pages/home";
 import { ChatPage } from "@/pages/chat";
-import { AboutPage } from "@/pages/about";
 import { ApiStatusPage } from "@/pages/api-status";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -45,7 +44,6 @@ function App() {
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/chat" element={<ChatPage />} />
-                  <Route path="/about" element={<AboutPage />} />
                   <Route path="/api-status" element={<ApiStatusPage />} />
                   <Route path="*" element={<HomePage />} />
                 </Routes>

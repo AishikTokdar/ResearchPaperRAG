@@ -1,14 +1,3 @@
-/**
- * TypeScript Type Definitions
- *
- * Central location for all shared types and interfaces used throughout the application.
- * This ensures type safety and provides clear contracts for data structures.
- */
-
-// ============================================================================
-// Chat & Message Types
-// ============================================================================
-
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -17,7 +6,6 @@ export interface ChatMessage {
 }
 
 export interface ChatEntry {
-  /** Stable id for React keys and session export; optional on legacy IndexedDB rows */
   id?: string;
   question: string;
   answer: string;
@@ -31,10 +19,6 @@ export interface ChatState {
   isLoading: boolean;
   error: string | null;
 }
-
-// ============================================================================
-// PDF & Document Types
-// ============================================================================
 
 export interface PDFDocument {
   id: string;
@@ -50,10 +34,6 @@ export interface PDFUploadState {
   document: PDFDocument | null;
   error: string | null;
 }
-
-// ============================================================================
-// API Types
-// ============================================================================
 
 export interface DocumentFileMeta {
   file_name: string;
@@ -122,9 +102,58 @@ export interface APIError {
   status_code?: number;
 }
 
-// ============================================================================
-// AI Model Types
-// ============================================================================
+export interface FetchedPaper {
+  id: string;
+  source_api: string;
+  title: string;
+  authors: string;
+  year: string;
+  abstract: string;
+  url: string;
+  pdf_url?: string;
+  is_open_access: boolean;
+  citations?: number;
+}
+
+export interface PaperSearchResponse {
+  query: string;
+  total_found: number;
+  papers: FetchedPaper[];
+}
+
+export interface IngestPapersRequest {
+  fetched_papers: FetchedPaper[];
+}
+
+export interface IngestPapersResponse {
+  status: string;
+  indexed_papers_count: number;
+  chunks_created: number;
+}
+
+export interface AnalyzeGapsRequest {
+  topic: string;
+  provider?: string;
+  model_name?: string;
+  api_key?: string;
+}
+
+export interface AnalyzeGapsResponse {
+  topic: string;
+  report: string;
+}
+
+export interface ChatFollowupRequest {
+  question: string;
+  provider?: string;
+  model_name?: string;
+  api_key?: string;
+}
+
+export interface ChatFollowupResponse {
+  question: string;
+  answer: string;
+}
 
 export type AIProvider =
   | "gemini"
@@ -145,39 +174,35 @@ export interface AIModel {
   apiKeyEnv?: string;
 }
 
-/**
- * Catalogue of free AI models used as client-side fallback.
- * The ModelSelector also fetches live models from backend /models.
- */
 export const AI_MODELS: AIModel[] = [
   {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
-    provider: "gemini",
+    id: "openai/gpt-oss-120b",
+    name: "GPT-OSS 120B (Groq)",
+    provider: "groq",
     description: "Free tier via Google AI Studio — ultra fast & accurate",
     isDefault: true,
   },
   {
-    id: "gemini-2.5-flash-lite",
-    name: "Gemini 2.5 Flash-Lite",
-    provider: "gemini",
+    id: "openai/gpt-oss-20b",
+    name: "GPT-OSS 20B (Groq)",
+    provider: "groq",
     description: "Free tier lightweight Gemini model",
   },
   {
-    id: "gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    provider: "gemini",
+    id: "qwen/qwen3.6-27b",
+    name: "Qwen 3.6 27B (Groq)",
+    provider: "groq",
     description: "Free tier high reasoning model",
   },
   {
-    id: "gemini-2.0-flash",
-    name: "Gemini 2.0 Flash",
+    id: "gemini-3.6-flash",
+    name: "Gemini 3.6 Flash",
     provider: "gemini",
     description: "Free tier stable 2.0 release",
   },
   {
-    id: "gemini-1.5-flash",
-    name: "Gemini 1.5 Flash",
+    id: "gemini-3.5-flash-lite",
+    name: "Gemini 3.5 Flash-Lite",
     provider: "gemini",
     description: "Free tier fast 1.5 model",
   },
@@ -260,6 +285,12 @@ export const AI_MODELS: AIModel[] = [
     description: "Free Hugging Face coding & document analysis",
   },
   {
+    id: "openrouter/free",
+    name: "Auto Free Router (OpenRouter)",
+    provider: "openrouter",
+    description: "Smart router automatically directing to available 100% free models",
+  },
+  {
     id: "meta-llama/llama-3.3-70b-instruct:free",
     name: "Llama 3.3 70B (OpenRouter Free)",
     provider: "openrouter",
@@ -283,11 +314,13 @@ export const AI_MODELS: AIModel[] = [
     provider: "openrouter",
     description: "100% free high-capacity model",
   },
+  {
+    id: "qwen/qwen-2.5-coder-32b-instruct:free",
+    name: "Qwen 2.5 Coder 32B (OpenRouter Free)",
+    provider: "openrouter",
+    description: "100% free coding & analysis model",
+  },
 ];
-
-// ============================================================================
-// UI Component Types
-// ============================================================================
 
 export type ButtonVariant =
   | "default"
@@ -316,10 +349,6 @@ export interface ScrollRevealProps {
   duration?: number;
   className?: string;
 }
-
-// ============================================================================
-// Feature & Section Types
-// ============================================================================
 
 export interface Feature {
   icon: React.ReactNode;

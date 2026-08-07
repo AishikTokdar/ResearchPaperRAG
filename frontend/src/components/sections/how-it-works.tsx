@@ -1,45 +1,47 @@
-import { Upload, Cpu, MessageCircle } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { GlassCard, GlassCardContent } from "@/components/ui/glass-card";
+import { motion } from "framer-motion";
+import { Search, CheckSquare, Database, Layers } from "lucide-react";
 import { SectionWrapper } from "@/components/layout/page-wrapper";
 import { HOW_IT_WORKS_STEPS } from "@/lib/constants";
 
-const stepIcons: LucideIcon[] = [Upload, Cpu, MessageCircle];
+const stepIcons = [Search, CheckSquare, Database, Layers];
 
 export function HowItWorksSection() {
   return (
-    <SectionWrapper id="how-it-works">
-      <div className="mb-12 text-center">
-        <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight mb-3">
-          How It Works
+    <SectionWrapper id="how-it-works" className="bg-zinc-50/50 dark:bg-zinc-950/50">
+      <div className="mb-12 text-center space-y-3">
+        <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight">
+          How the Research Pipeline Works
         </h2>
         <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
-          Three steps to process documents and generate grounded responses.
+          From multi-source academic query to vector database indexing and 8-layer RAG gap report synthesis.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {HOW_IT_WORKS_STEPS.map((step, index) => {
-          const Icon = stepIcons[index];
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {HOW_IT_WORKS_STEPS.map((step, idx) => {
+          const Icon = stepIcons[idx % stepIcons.length];
           return (
-            <GlassCard key={step.step} variant="hover" padding="default">
-              <GlassCardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-800 dark:text-zinc-200">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-                    Step 0{step.step}
-                  </span>
-                </div>
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                  {step.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  {step.description}
-                </p>
-              </GlassCardContent>
-            </GlassCard>
+            <motion.div
+              key={step.step}
+              initial={{ opacity: 0, y: 15 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.3, delay: idx * 0.1 }}
+              className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm relative space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <span className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center font-mono">
+                  0{step.step}
+                </span>
+                <Icon className="w-5 h-5 text-indigo-500/70" />
+              </div>
+              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                {step.title}
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                {step.description}
+              </p>
+            </motion.div>
           );
         })}
       </div>

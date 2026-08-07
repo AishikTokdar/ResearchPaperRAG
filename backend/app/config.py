@@ -68,7 +68,8 @@ class AIProvider:
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
-# Supported Free AI providers (order = default fallback priority)
+# Supported AI providers (order = default fallback priority).
+# Groq is intentionally first; Gemini is the second-choice fallback.
 # ---------------------------------------------------------------------------
 AI_PROVIDERS: dict[str, AIProvider] = {
     "gemini": AIProvider(
@@ -76,12 +77,14 @@ AI_PROVIDERS: dict[str, AIProvider] = {
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         api_key_env="GOOGLE_API_KEY",
         models=[
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-pro",
             "gemini-flash-latest",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
         ],
         embedding_model="gemini-embedding-001",
     ),
@@ -90,11 +93,12 @@ AI_PROVIDERS: dict[str, AIProvider] = {
         base_url="https://api.groq.com/openai/v1",
         api_key_env="GROQ_API_KEY",
         models=[
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-safeguard-20b",
+            "qwen/qwen3.6-27b",
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it",
-            "deepseek-r1-distill-llama-70b",
         ],
         embedding_model=None,
     ),
@@ -103,8 +107,9 @@ AI_PROVIDERS: dict[str, AIProvider] = {
         base_url="https://api.cerebras.ai/v1",
         api_key_env="CEREBRAS_API_KEY",
         models=[
-            "llama3.3-70b",
-            "llama3.1-8b",
+            "gpt-oss-120b",
+            "gemma-4-31b",
+            "qwen-3-32b",
         ],
         embedding_model=None,
     ),
@@ -113,9 +118,11 @@ AI_PROVIDERS: dict[str, AIProvider] = {
         base_url="https://api.sambanova.ai/v1",
         api_key_env="SAMBANOVA_API_KEY",
         models=[
+            "DeepSeek-V3-0324",
+            "DeepSeek-R1",
+            "Llama-4-Maverick-17B-128E-Instruct",
+            "Llama-4-Scout-17B-16E-Instruct",
             "Meta-Llama-3.3-70B-Instruct",
-            "Meta-Llama-3.1-8B-Instruct",
-            "Qwen2.5-72B-Instruct",
             "DeepSeek-R1-Distill-Llama-70B",
         ],
         embedding_model=None,
@@ -125,10 +132,10 @@ AI_PROVIDERS: dict[str, AIProvider] = {
         base_url="https://router.huggingface.co/v1",
         api_key_env="HF_API_KEY",
         models=[
-            "mistralai/Mistral-7B-Instruct-v0.3",
-            "HuggingFaceH4/zephyr-7b-beta",
+            "google/gemma-4-31b-it",
+            "openai/gpt-oss-120b",
+            "Qwen/Qwen3.5-27B",
             "meta-llama/Meta-Llama-3-8B-Instruct",
-            "Qwen/Qwen2.5-Coder-32B-Instruct",
         ],
         embedding_model="sentence-transformers/all-MiniLM-L6-v2",
     ),
@@ -137,12 +144,13 @@ AI_PROVIDERS: dict[str, AIProvider] = {
         base_url="https://openrouter.ai/api/v1",
         api_key_env="OPENROUTER_API_KEY",
         models=[
+            "openrouter/free",
+            "openai/gpt-oss-120b:free",
+            "openai/gpt-oss-20b:free",
+            "google/gemini-3.1-flash-lite:free",
+            "qwen/qwen3.5-27b:free",
+            "z-ai/glm-4.7:free",
             "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemini-2.0-flash-exp:free",
-            "deepseek/deepseek-r1:free",
-            "qwen/qwen-2.5-72b-instruct:free",
-            "mistralai/mistral-7b-instruct:free",
-            "google/gemma-2-9b-it:free",
         ],
         embedding_model=None,
     ),
@@ -150,7 +158,7 @@ AI_PROVIDERS: dict[str, AIProvider] = {
 
 # Ordered priority for automatic free failover attempts
 PROVIDER_PRIORITY: list[str] = [
-    "gemini", "groq", "cerebras", "sambanova", "huggingface", "openrouter",
+    "groq", "gemini", "cerebras", "sambanova", "huggingface", "openrouter",
 ]
 
 
@@ -187,8 +195,8 @@ class Settings(BaseSettings):
     embedding_openai_direct: bool = Field(default=False)
 
     # Default AI settings
-    default_model: str = "openai/gpt-4o-mini"
-    default_provider: str = "openrouter"
+    default_model: str = "openai/gpt-oss-120b"
+    default_provider: str = "groq"
     temperature: float = 0.0
     max_tokens: int = 2048
 
@@ -299,7 +307,7 @@ def get_embedding_fallback_chain() -> list[tuple[AIProvider, str]]:
     Ordered embedding backends to try (upload / index build).
 
     Puts the configured default provider first when it defines an embedding model,
-    then walks PROVIDER_PRIORITY (OpenRouter, Gemini, Hugging Face, OpenAI; Groq skipped when no embedding_model).
+    then walks PROVIDER_PRIORITY (Groq is skipped because it has no embedding model; Gemini and Hugging Face are used when configured).
     Direct OpenAI embeddings run only if embedding_openai_direct is true.
     """
     chain: list[tuple[AIProvider, str]] = []

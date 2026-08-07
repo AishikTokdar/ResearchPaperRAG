@@ -111,7 +111,7 @@ export function ApiStatusPage() {
                 <Cpu className="w-4 h-4" />
               </div>
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                {data?.default_model ?? "gemini-2.5-flash"}
+                {data?.default_model ?? "openai/gpt-oss-120b"}
               </div>
             </GlassCardContent>
           </GlassCard>

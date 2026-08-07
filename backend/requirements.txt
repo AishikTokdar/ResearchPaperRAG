@@ -17,6 +17,14 @@ langchain-text-splitters>=0.2.0
 
 # Vector Store
 faiss-cpu>=1.8.0
+chromadb>=0.5.0
+langchain-chroma>=0.1.0
+
+# Academic APIs & UI
+arxiv>=2.1.0
+semanticscholar>=0.8.4
+requests>=2.31.0
+streamlit>=1.35.0
 
 # Local embeddings fallback
 sentence-transformers>=2.7.0

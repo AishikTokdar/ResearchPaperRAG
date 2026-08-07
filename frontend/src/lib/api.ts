@@ -1,15 +1,3 @@
-/**
- * API Client Module
- *
- * Centralized API client for all backend communication.
- * Handles requests, responses, error handling, and SSE streaming.
- *
- * Walkthrough:
- *   1. ``withSessionHeaders`` injects ``X-Chat-Session-Id`` (see ``chat-session.ts``).
- *   2. JSON helpers use ``fetchWithErrorHandling``; streaming uses manual ``fetch`` + ReadableStream.
- *   3. ``api`` object groups REST calls used by hooks and components.
- */
-
 import { API_ENDPOINTS, joinApiUrl } from "./constants";
 import { getChatApiSessionId, isValidChatApiSessionId } from "./chat-session";
 import type {
@@ -19,11 +7,13 @@ import type {
   StatusResponse,
   APIError,
   RuntimeSummary,
+  FetchedPaper,
+  PaperSearchResponse,
+  IngestPapersResponse,
+  AnalyzeGapsResponse,
+  ChatFollowupResponse,
 } from "@/types";
 
-/**
- * Custom error class for API errors
- */
 export class ApiError extends Error {
   status: number;
   detail: string;
@@ -61,9 +51,6 @@ function withSessionHeaders(init?: RequestInit): RequestInit {
   return { ...init, headers: merged };
 }
 
-/**
- * Base fetch wrapper with error handling
- */
 async function fetchWithErrorHandling<T>(
   url: string,
   options?: RequestInit,
@@ -90,10 +77,6 @@ async function fetchWithErrorHandling<T>(
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// SSE streaming helpers
-// ---------------------------------------------------------------------------
 
 export interface StreamCallbacks {
   onToken: (text: string) => void;
@@ -165,7 +148,6 @@ export function streamQuestion(
                   break;
               }
             } catch {
-              /* skip malformed JSON */
             }
           }
         }
@@ -179,10 +161,6 @@ export function streamQuestion(
 
   return controller;
 }
-
-// ---------------------------------------------------------------------------
-// REST API Client
-// ---------------------------------------------------------------------------
 
 export const api = {
   async checkHealth(): Promise<StatusResponse> {
@@ -236,6 +214,70 @@ export const api = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
+      },
+    );
+  },
+
+  async searchPapers(query: string, limitPerSource: number = 4): Promise<PaperSearchResponse> {
+    return fetchWithErrorHandling<PaperSearchResponse>(
+      joinApiUrl(API_ENDPOINTS.PAPER_SEARCH),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, limit_per_source: limitPerSource }),
+      },
+    );
+  },
+
+  async ingestPapers(fetchedPapers: FetchedPaper[]): Promise<IngestPapersResponse> {
+    return fetchWithErrorHandling<IngestPapersResponse>(
+      joinApiUrl(API_ENDPOINTS.PAPER_INGEST),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fetched_papers: fetchedPapers }),
+      },
+    );
+  },
+
+  async analyzeGaps(
+    topic: string,
+    provider: string = "ollama",
+    modelName: string = "mistral",
+    apiKey?: string,
+  ): Promise<AnalyzeGapsResponse> {
+    return fetchWithErrorHandling<AnalyzeGapsResponse>(
+      joinApiUrl(API_ENDPOINTS.ANALYZE_GAPS),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          provider,
+          model_name: modelName,
+          api_key: apiKey,
+        }),
+      },
+    );
+  },
+
+  async chatFollowup(
+    question: string,
+    provider: string = "ollama",
+    modelName: string = "mistral",
+    apiKey?: string,
+  ): Promise<ChatFollowupResponse> {
+    return fetchWithErrorHandling<ChatFollowupResponse>(
+      joinApiUrl(API_ENDPOINTS.CHAT_FOLLOWUP),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          provider,
+          model_name: modelName,
+          api_key: apiKey,
+        }),
       },
     );
   },

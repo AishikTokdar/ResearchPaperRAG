@@ -1,7 +1,3 @@
-/**
- * Home Page
- */
-
 import { PageWrapper } from "@/components/layout/page-wrapper";
 import {
   HeroSection,

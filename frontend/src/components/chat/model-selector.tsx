@@ -57,7 +57,6 @@ export function ModelSelector({
           );
           setModels(live);
 
-          // Auto-select first available model if currently selected model is missing a key
           const firstAvailable = live.find((m) => m.isAvailable !== false);
           const current = live.find((m) => m.id === value);
           if (firstAvailable && (!current || current.isAvailable === false)) {
@@ -65,7 +64,6 @@ export function ModelSelector({
           }
         }
       } catch {
-        /* static fallback */
       }
     })();
     return () => {
@@ -73,7 +71,6 @@ export function ModelSelector({
     };
   }, []);
 
-  // Sort models: Configured / Ready models MUST come first!
   const sortedModels = React.useMemo(() => {
     const active = models.filter((m) => m.isAvailable !== false);
     const inactive = models.filter((m) => m.isAvailable === false);
@@ -87,7 +84,6 @@ export function ModelSelector({
   const hasAvailable = availableModels.length > 0;
   const selected = sortedModels.find((m) => m.id === value) ?? availableModels[0] ?? sortedModels[0];
 
-  // Group models by provider vertically
   const groupedProviders = React.useMemo(() => {
     const map = new Map<AIProvider, AIModel[]>();
     sortedModels.forEach((m) => {
@@ -135,7 +131,6 @@ export function ModelSelector({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      {/* Trigger Button */}
       <button
         type="button"
         disabled={disabled}
@@ -170,7 +165,6 @@ export function ModelSelector({
         </div>
       </button>
 
-      {/* Vertical Dropdown Overlay */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -180,7 +174,6 @@ export function ModelSelector({
             transition={{ duration: 0.12 }}
             className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden max-h-96 flex flex-col"
           >
-            {/* Header with Provider Dropdown Filter */}
             <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 space-y-2 shrink-0">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">Select AI Model</span>
@@ -189,7 +182,6 @@ export function ModelSelector({
                 </span>
               </div>
 
-              {/* Vertical Dropdown Filter */}
               <div className="relative flex items-center">
                 <Filter className="w-3.5 h-3.5 absolute left-2.5 text-zinc-400 pointer-events-none" />
                 <select
@@ -211,7 +203,6 @@ export function ModelSelector({
               </div>
             </div>
 
-            {/* Vertical Grouped Model List */}
             <div className="p-2 overflow-y-auto space-y-3 flex-1">
               {!hasAvailable && (
                 <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
@@ -232,7 +223,6 @@ export function ModelSelector({
 
                   return (
                     <div key={provKey} className="space-y-1">
-                      {/* Provider Vertical Section Header */}
                       <div className="flex items-center justify-between px-2 py-1 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider bg-zinc-100/60 dark:bg-zinc-800/40 rounded-lg">
                         <div className="flex items-center gap-1.5">
                           <ProvIcon className="w-3.5 h-3.5" />
@@ -249,7 +239,6 @@ export function ModelSelector({
                         )}
                       </div>
 
-                      {/* Vertical Model Items */}
                       {provModels.map((model) => {
                         const isConfigured = model.isAvailable !== false;
                         const isSelected = model.id === value;

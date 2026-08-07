@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, FileText, Brain, Zap } from "lucide-react";
+import { ArrowRight, Filter } from "lucide-react";
 import { Button, Badge, AnimatedGridPattern, BorderBeam, ScrambleText } from "@/components/ui";
 
 export function HeroSection() {
@@ -14,65 +14,57 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="flex flex-col items-center max-w-3xl"
+          className="flex flex-col items-center max-w-4xl"
         >
           <div className="relative inline-block mb-6">
-            <Badge variant="outline" className="px-3.5 py-1 text-xs">
-              <Sparkles className="w-3.5 h-3.5 mr-1 text-emerald-500" />
-              AI Document Intelligence &amp; Vector Search
+            <Badge variant="outline" className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20">
+              <Filter className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
+              Automated Academic Literature Search &amp; Multi-Paper RAG Synthesis
             </Badge>
-            <BorderBeam size={120} duration={8} colorFrom="#10b981" colorTo="#3b82f6" />
+            <BorderBeam size={140} duration={8} colorFrom="#6366f1" colorTo="#3b82f6" />
           </div>
 
           <h1 className="text-4xl sm:text-6xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight leading-[1.1] mb-6">
-            Intelligent PDF Chat Powered by{" "}
-            <span className="text-emerald-600 dark:text-emerald-400">
-              <ScrambleText text="Retrieval RAG" />
+            Discover Research Gaps with{" "}
+            <span className="text-indigo-600 dark:text-indigo-400">
+              <ScrambleText text="Multi-Paper RAG" />
             </span>
           </h1>
 
-          <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed mb-8 max-w-2xl">
-            Upload documents, parse context into local FAISS vector stores, and query grounded answers with automatic multi-provider model failover.
+          <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed mb-8 max-w-3xl">
+            Query 6 free academic sources (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ) across the last 3 publication years (2024-2026), ingest up to 3 papers, and generate structured 8-layer literature synthesis reports with grounded follow-up chat.
           </p>
 
-          <div className="flex flex-wrap justify-center gap-2 mb-10">
-            {[
-              { icon: FileText, text: "PDF Analysis" },
-              { icon: Brain, text: "7-Agent Pipeline" },
-              { icon: Zap, text: "Real-time SSE Streaming" },
-            ].map((f) => (
-              <span
-                key={f.text}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 shadow-xs"
-              >
-                <f.icon className="w-3.5 h-3.5 text-emerald-500" />
-                {f.text}
-              </span>
-            ))}
+          {/* Academic Source API Badges */}
+          <div className="flex flex-wrap justify-center gap-2 mb-10 text-xs font-medium">
+            <span className="px-2.5 py-1 rounded-full bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20">arXiv</span>
+            <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">Crossref</span>
+            <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">Semantic Scholar</span>
+            <span className="px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/20">OpenAlex</span>
+            <span className="px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-400 border border-teal-500/20">PubMed (Healthcare)</span>
+            <span className="px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-500/20">DOAJ</span>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <Button size="lg" onClick={() => navigate("/chat")} className="w-full sm:w-auto relative group overflow-hidden">
-              Get Started - Launch Chat
-              <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
-            </Button>
-            <Button variant="outline" size="lg" onClick={() => navigate("/about")} className="w-full sm:w-auto">
-              View Architecture
+          <div className="flex flex-col sm:flex-row items-center gap-3.5">
+            <Button size="lg" onClick={() => navigate("/chat")} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md px-8 py-6 text-base">
+              Start Research Analysis
+              <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
             </Button>
           </div>
 
+          {/* Key Metrics / Highlights */}
           <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 w-full pt-8 border-t border-zinc-200 dark:border-zinc-800">
             {[
-              { value: "100%", label: "Open Source" },
-              { value: "FAISS", label: "Vector Search" },
-              { value: "50MB", label: "Max Cumulative Size" },
-              { value: "SSE", label: "Live Streaming" },
+              { value: "6 Free APIs", label: "Academic Sources" },
+              { value: "2024–2026", label: "3-Year Literature Window" },
+              { value: "8 Layers", label: "Structured Analysis" },
+              { value: "PDF / MD / TXT", label: "Export Formats" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                <div className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                   {stat.value}
                 </div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 font-medium">
                   {stat.label}
                 </div>
               </div>
