@@ -1,0 +1,41 @@
+# ResearchPaperRAG Backend Dependencies
+
+# Core Framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+python-multipart>=0.0.9
+sse-starlette>=2.0.0
+
+# LangChain Stack
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-openai>=0.1.0
+langchain-core>=0.2.0
+langchain-text-splitters>=0.2.0
+
+# Vector Store
+faiss-cpu>=1.8.0
+
+# Local embeddings fallback
+sentence-transformers>=2.7.0
+
+# PDF Processing
+pypdf>=4.2.0
+
+# Environment
+python-dotenv>=1.0.1
+
+# Gradio (for Hugging Face Spaces Backend)
+gradio>=5.0.0,<6.0.0
+
+# ZeroGPU decorator/runtime integration
+spaces>=0.50.0
+
+# HTTP Client
+httpx>=0.27.0
+aiohttp>=3.9.5
+
+# Utilities
+tenacity>=8.3.0
