@@ -1,6 +1,7 @@
 import * as React from "react";
-import { Download, FileText, FileCode, Printer, ExternalLink } from "lucide-react";
+import { Download, FileText, FileCode, Printer, ExternalLink, Copy, Check, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface ReportRendererProps {
   report: string;
@@ -8,6 +9,19 @@ interface ReportRendererProps {
 }
 
 export function ReportRenderer({ report, topic }: ReportRendererProps) {
+  const [copiedFull, setCopiedFull] = React.useState(false);
+
+  const handleCopyFullReport = async () => {
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopiedFull(true);
+      toast.success("Full gap analysis report copied to clipboard!");
+      setTimeout(() => setCopiedFull(false), 2000);
+    } catch {
+      toast.error("Failed to copy report to clipboard.");
+    }
+  };
+
   const handleDownloadMd = () => {
     const cleanedMd = report.replace(/\[\*\*([^*]+)\*\*\]/g, "[$1]");
     const blob = new Blob([cleanedMd], { type: "text/markdown" });
@@ -151,7 +165,18 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleCopyFullReport} className="gap-1.5 text-xs">
+            {copiedFull ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" /> Copied
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" /> Copy Full Report
+              </>
+            )}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleDownloadMd} className="gap-1.5 text-xs">
             <FileCode className="w-3.5 h-3.5" /> .md
           </Button>
@@ -192,20 +217,110 @@ function ReportSectionsRenderer({ report }: { report: string }) {
         if (!cleanContent) return null;
 
         return (
-          <div
-            key={idx}
-            className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 border-l-4 border-l-indigo-500 shadow-sm space-y-3"
-          >
-            {sectionTitle && (
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 pb-2 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
-                {sectionTitle}
-              </h3>
-            )}
-            <FormattedBlock text={cleanContent} />
-          </div>
+          <ReportSectionCard key={idx} sectionTitle={sectionTitle} cleanContent={cleanContent} />
         );
       })}
+    </div>
+  );
+}
+
+function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: string | null; cleanContent: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  const isNotice = cleanContent.startsWith(">") || cleanContent.includes("[NOTICE]");
+  const isFallbackAlert = cleanContent.includes("[FALLBACK ALERT]");
+  const isExhaustedAlert = cleanContent.includes("[ALL MODELS EXHAUSTED]") || cleanContent.startsWith("Error generating research gap report:");
+
+  if ((isNotice || isFallbackAlert || isExhaustedAlert) && !sectionTitle) {
+    let alertMessage = cleanContent
+      .replace(/^>\s*/gm, "")
+      .replace(/\[(NOTICE|FALLBACK ALERT|ALL MODELS EXHAUSTED)\]/g, "")
+      .trim();
+
+    if (cleanContent.startsWith("Error generating research gap report:")) {
+      alertMessage = "All AI model providers (Groq, OpenRouter, Cerebras, SambaNova, Gemini) were temporarily unable to process the request due to API rate limits or token quota constraints.\n\n**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again.";
+    }
+
+    return (
+      <div className={`p-4.5 rounded-xl text-xs sm:text-sm font-medium flex items-start gap-3 shadow-xs border ${
+        isExhaustedAlert
+          ? "bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200"
+          : "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
+      }`}>
+        <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`} />
+        <div className="flex-1 leading-relaxed">
+          <FormattedBlock text={alertMessage} />
+        </div>
+      </div>
+    );
+  }
+
+  const handleCopySection = async () => {
+    const textToCopy = sectionTitle ? `## ${sectionTitle}\n\n${cleanContent}` : cleanContent;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      toast.success(`Copied "${sectionTitle || "Section"}" to clipboard!`);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy section.");
+    }
+  };
+
+  return (
+    <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 border-l-4 border-l-indigo-500 shadow-sm space-y-3 relative group">
+      {sectionTitle ? (
+        <div className="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
+            {sectionTitle}
+          </h3>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleCopySection}
+            className="h-7 px-2.5 text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
+            title="Copy section text"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300" />
+                <span>Copy Section</span>
+              </>
+            )}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleCopySection}
+            className="h-7 px-2.5 text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
+            title="Copy section text"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300" />
+                <span>Copy Section</span>
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+      <FormattedBlock text={cleanContent} />
     </div>
   );
 }
@@ -309,7 +424,7 @@ function FormattedBlock({ text }: { text: string }) {
             {paragraphs.map((p, pIdx) => {
               const cleanP = p.trim();
               if (!cleanP) return null;
-              if (cleanP.match(/^(---|---|-{3,}|\|\-\-+|\*\*\*)$/)) return null;
+              if (cleanP.match(/^(---|---| -{3,}|\|\-\-+|\*\*\*)$/)) return null;
 
               return (
                 <p key={pIdx} className="leading-relaxed">

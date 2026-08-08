@@ -19,7 +19,7 @@ export function HeroSection() {
           <div className="relative inline-block mb-6">
             <Badge variant="outline" className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20">
               <Filter className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
-              Automated Academic Literature Search &amp; Multi-Paper RAG Synthesis
+              Automated Academic Literature Search &amp; ResearchPaper RAG Synthesis
             </Badge>
             <BorderBeam size={140} duration={8} colorFrom="#6366f1" colorTo="#3b82f6" />
           </div>
@@ -27,15 +27,14 @@ export function HeroSection() {
           <h1 className="text-4xl sm:text-6xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight leading-[1.1] mb-6">
             Discover Research Gaps with{" "}
             <span className="text-indigo-600 dark:text-indigo-400">
-              <ScrambleText text="Multi-Paper RAG" />
+              <ScrambleText text="ResearchPaper RAG" />
             </span>
           </h1>
 
           <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed mb-8 max-w-3xl">
-            Query 6 free academic sources (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ) across the last 3 publication years (2024-2026), ingest up to 3 papers, and generate structured 8-layer literature synthesis reports with grounded follow-up chat.
+            Query 6 free academic sources (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ) across the last 3 publication years (2024-2026), ingest up to 5 papers, and generate structured 8-layer literature synthesis reports with grounded follow-up chat.
           </p>
 
-          {/* Academic Source API Badges */}
           <div className="flex flex-wrap justify-center gap-2 mb-10 text-xs font-medium">
             <span className="px-2.5 py-1 rounded-full bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20">arXiv</span>
             <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">Crossref</span>
@@ -52,21 +51,16 @@ export function HeroSection() {
             </Button>
           </div>
 
-          {/* Key Metrics / Highlights */}
           <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 w-full pt-8 border-t border-zinc-200 dark:border-zinc-800">
             {[
               { value: "6 Free APIs", label: "Academic Sources" },
               { value: "2024–2026", label: "3-Year Literature Window" },
               { value: "8 Layers", label: "Structured Analysis" },
-              { value: "PDF / MD / TXT", label: "Export Formats" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                  {stat.value}
-                </div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 font-medium">
-                  {stat.label}
-                </div>
+              { value: "5 Papers", label: "Max Knowledge Base" },
+            ].map((stat, idx) => (
+              <div key={idx} className="text-center space-y-1">
+                <div className="text-xl sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">{stat.value}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">{stat.label}</div>
               </div>
             ))}
           </div>

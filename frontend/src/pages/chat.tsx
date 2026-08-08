@@ -21,6 +21,8 @@ import {
   Check,
   Circle,
   CheckCircle2,
+  Trash2,
+  X,
 } from "lucide-react";
 import { PageWrapper, SectionWrapper } from "@/components/layout/page-wrapper";
 import { Button } from "@/components/ui/button";
@@ -117,7 +119,9 @@ export function ChatPage() {
 
   const handleSaveModel = () => {
     setActiveModelObj(selectedModelObj);
-    toast.success(`Active AI Model Saved: ${selectedModelObj.name} (${selectedModelObj.provider.toUpperCase()})`);
+    setReport(null);
+    setActiveStepIndex(-1);
+    toast.success(`Active AI Model Saved: ${selectedModelObj.name} (${selectedModelObj.provider.toUpperCase()}). Pipeline reset for new model.`);
   };
 
   const handleSearch = async (e?: React.FormEvent) => {
@@ -189,6 +193,20 @@ export function ChatPage() {
     }
   };
 
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles((prev) => {
+      const removed = prev[index];
+      const next = prev.filter((_, i) => i !== index);
+      toast.info(`Removed ${removed?.name || "document"}.`);
+      return next;
+    });
+  };
+
+  const handleClearUploadedFiles = () => {
+    setUploadedFiles([]);
+    toast.info("Cleared all uploaded PDFs.");
+  };
+
   const selectedFetchedPapers = fetchedPapers.filter((p) => selectedPaperIds.has(p.id));
   const totalActivePapers = selectedFetchedPapers.length + uploadedFiles.length;
 
@@ -202,6 +220,7 @@ export function ChatPage() {
       return;
     }
 
+    setReport(null);
     setIsAnalyzing(true);
     setActiveStepIndex(0);
 
@@ -210,10 +229,10 @@ export function ChatPage() {
         await api.uploadPDFs(uploadedFiles);
       }
       setActiveStepIndex(1);
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 450));
 
       setActiveStepIndex(2);
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 450));
 
       setActiveStepIndex(3);
       if (selectedFetchedPapers.length > 0) {
@@ -221,10 +240,10 @@ export function ChatPage() {
       }
       
       setActiveStepIndex(4);
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 400));
 
       setActiveStepIndex(5);
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 400));
 
       setActiveStepIndex(6);
       const res = await api.analyzeGaps(
@@ -515,14 +534,34 @@ export function ChatPage() {
 
                 {uploadedFiles.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold text-zinc-500">Attached PDFs ({uploadedFiles.length})</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-zinc-500">Attached PDFs ({uploadedFiles.length})</p>
+                      <button
+                        type="button"
+                        onClick={handleClearUploadedFiles}
+                        className="text-[11px] text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:underline flex items-center gap-1 font-medium"
+                      >
+                        <Trash2 className="w-3 h-3" /> Clear All
+                      </button>
+                    </div>
                     <div className="space-y-1">
                       {uploadedFiles.map((file, i) => (
-                        <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs">
-                          <span className="truncate text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                            <FileText className="w-3.5 h-3.5 text-indigo-400" /> {file.name}
+                        <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs gap-2">
+                          <span className="truncate text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 min-w-0">
+                            <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span className="truncate">{file.name}</span>
                           </span>
-                          <span className="text-zinc-400 text-[10px]">{round(file.size / 1024, 1)} KB</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-zinc-400 text-[10px]">{round(file.size / 1024, 1)} KB</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFile(i)}
+                              className="p-1 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                              title="Remove PDF"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -531,17 +570,17 @@ export function ChatPage() {
               </div>
             )}
 
-            <div className="p-5 rounded-2xl bg-zinc-900 text-zinc-100 border border-zinc-800 space-y-4 font-sans">
+            <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4 font-sans">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold flex items-center gap-2 text-zinc-100">
-                    <BookOpen className="w-4 h-4 text-indigo-400" /> Active Knowledge Base
+                  <h3 className="text-sm font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                    <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> Active Knowledge Base
                   </h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Selected papers ({totalActivePapers} / {MAX_SELECTED_PAPERS} max)
                   </p>
                 </div>
-                <span className="text-xl font-bold text-indigo-400">{totalActivePapers} / {MAX_SELECTED_PAPERS}</span>
+                <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{totalActivePapers} / {MAX_SELECTED_PAPERS}</span>
               </div>
 
               <Button
@@ -553,30 +592,30 @@ export function ChatPage() {
                 {isAnalyzing ? "Analyzing Papers..." : "Run Multi-Paper Gap Analysis"}
               </Button>
 
-              <div className="pt-3 border-t border-zinc-800 space-y-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+              <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
                   Pipeline Processing Steps
                 </p>
                 {PIPELINE_STEPS.map((step, i) => {
-                  const isCompleted = activeStepIndex > i || report !== null;
+                  const isCompleted = isAnalyzing ? activeStepIndex > i : (report !== null || activeStepIndex > i);
                   const isCurrent = activeStepIndex === i && isAnalyzing;
 
                   return (
                     <div key={i} className="flex items-start gap-2.5 text-xs">
                       <div className="mt-0.5 shrink-0">
                         {isCompleted ? (
-                          <Check className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                          <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
                         ) : isCurrent ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                          <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
                         ) : (
-                          <Circle className="w-3.5 h-3.5 text-zinc-600" />
+                          <Circle className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-600" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className={`font-semibold font-mono leading-tight ${isCompleted ? "text-zinc-100" : isCurrent ? "text-indigo-300" : "text-zinc-500"}`}>
+                        <div className={`font-semibold font-mono leading-tight ${isCompleted ? "text-zinc-900 dark:text-zinc-100" : isCurrent ? "text-indigo-600 dark:text-indigo-300" : "text-zinc-400 dark:text-zinc-500"}`}>
                           {step.title}
                         </div>
-                        <div className="text-[11px] text-zinc-400 font-mono leading-tight mt-0.5 truncate">
+                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono leading-tight mt-0.5 truncate">
                           {step.detail}
                         </div>
                       </div>
@@ -625,8 +664,8 @@ export function ChatPage() {
                       }`}
                     >
                       {msg.sender === "assistant" && (
-                        <div className="w-7 h-7 rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-800 flex items-center justify-center shrink-0">
-                          <Bot className="w-4 h-4 text-indigo-400" />
+                        <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0">
+                          <Bot className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                         </div>
                       )}
                       <div
@@ -639,7 +678,7 @@ export function ChatPage() {
                         {msg.text}
                       </div>
                       {msg.sender === "user" && (
-                        <div className="w-7 h-7 rounded-lg bg-zinc-700 text-zinc-200 flex items-center justify-center shrink-0">
+                        <div className="w-7 h-7 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center shrink-0">
                           <User className="w-4 h-4" />
                         </div>
                       )}

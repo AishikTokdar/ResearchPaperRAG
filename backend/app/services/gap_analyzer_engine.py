@@ -9,7 +9,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
 
 try:
     from langchain_chroma import Chroma
@@ -39,6 +42,10 @@ class GapAnalyzerEngine:
     def embeddings(self):
         if self._embeddings is None:
             try:
+                hf_token = os.getenv("HF_API_KEY") or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+                if hf_token and "HF_TOKEN" not in os.environ:
+                    os.environ["HF_TOKEN"] = hf_token
+                
                 self._embeddings = HuggingFaceEmbeddings(model_name=self.embedding_model_name)
             except Exception as e:
                 raise e
@@ -212,33 +219,30 @@ class GapAnalyzerEngine:
                 max_tokens=8192,
             )
 
-    def generate_gap_report(
+    def _try_single_generation(
         self,
         topic: str,
-        provider: str = "groq",
-        model_name: str = "openai/gpt-oss-120b",
-        api_key: Optional[str] = None
-    ) -> str:
-        if not self.vector_store:
-            return "Error: No papers indexed in vector store. Please fetch or upload papers first."
+        provider: str,
+        model_name: str,
+        api_key: Optional[str]
+    ) -> Optional[str]:
+        try:
+            llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
+            retriever = self.vector_store.as_retriever(search_kwargs={"k": 4})
+            retrieved_docs = retriever.invoke(f"Research gaps trends methods limitations contradictions for {topic}")
 
-        llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
+            formatted_context_items = []
+            for d in retrieved_docs:
+                paper_title = d.metadata.get("paper_title", "Unknown")
+                section = d.metadata.get("section", "Section N/A")
+                year = d.metadata.get("year", "")
+                url = d.metadata.get("source", "") or d.metadata.get("url", "")
+                formatted_context_items.append(
+                    f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()[:500]}"
+                )
+            formatted_context = "\n\n".join(formatted_context_items)
 
-        retriever = self.vector_store.as_retriever(search_kwargs={"k": 8})
-        retrieved_docs = retriever.invoke(f"Research gaps trends methods limitations contradictions for {topic}")
-
-        formatted_context_items = []
-        for d in retrieved_docs:
-            paper_title = d.metadata.get("paper_title", "Unknown")
-            section = d.metadata.get("section", "Section N/A")
-            year = d.metadata.get("year", "")
-            url = d.metadata.get("source", "") or d.metadata.get("url", "")
-            formatted_context_items.append(
-                f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()}"
-            )
-        formatted_context = "\n\n".join(formatted_context_items)
-
-        system_prompt = """You are an expert academic research assistant.
+            system_prompt = """You are an expert academic research assistant.
 Analyze the provided research papers context for the topic: "{topic}".
 
 Generate a comprehensive, professional Markdown research report formatted strictly into these 8 section headers:
@@ -281,10 +285,8 @@ RETRIEVED MULTI-PAPER CONTEXT:
 {context}
 """
 
-        prompt = ChatPromptTemplate.from_template(system_prompt)
-        chain = prompt | llm | StrOutputParser()
-
-        try:
+            prompt = ChatPromptTemplate.from_template(system_prompt)
+            chain = prompt | llm | StrOutputParser()
             report = chain.invoke({"topic": topic, "context": formatted_context})
 
             for p in self.paper_metadata_list:
@@ -297,7 +299,149 @@ RETRIEVED MULTI-PAPER CONTEXT:
 
             return report
         except Exception as e:
-            return f"Error generating research gap report: {str(e)}"
+            return f"ERROR: {str(e)}"
+
+    def _generate_split_gap_report(
+        self,
+        topic: str,
+        provider: str = "groq",
+        model_name: str = "openai/gpt-oss-120b",
+        api_key: Optional[str] = None
+    ) -> str:
+        try:
+            llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
+
+            retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
+            retrieved_docs = retriever.invoke(f"Research literature trends methods limitations contradictions {topic}")
+
+            formatted_context_items = []
+            for d in retrieved_docs:
+                paper_title = d.metadata.get("paper_title", "Unknown")
+                section = d.metadata.get("section", "Section N/A")
+                year = d.metadata.get("year", "")
+                url = d.metadata.get("source", "") or d.metadata.get("url", "")
+                formatted_context_items.append(
+                    f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()[:400]}"
+                )
+            compact_context = "\n\n".join(formatted_context_items)
+
+            batch_1_prompt = """You are an academic research assistant.
+Analyze the provided paper context for topic: "{topic}".
+Generate Part 1 of the research report covering strictly these 4 sections:
+
+## 1. Literature Summary
+Provide a clear, high-level synthesis summarizing core objectives and contributions of analyzed papers.
+
+## 2. Trend Detection
+Identify emerging technological, architectural, or domain trends in recent publications (2024-2026).
+
+## 3. Common Methods
+Detail key methodologies, algorithms, models, datasets, and experimental frameworks.
+
+## 4. Limitations
+Identify recurring methodological weaknesses, dataset constraints, or evaluation bottlenecks.
+
+RULES:
+- Clean academic tone. No emojis or casual symbols.
+- Format citations as `[Paper Title, Year](URL)` using the exact URL in the context.
+
+CONTEXT:
+{context}
+"""
+
+            batch_2_prompt = """You are an academic research assistant.
+Analyze the provided paper context for topic: "{topic}".
+Generate Part 2 of the research report covering strictly these 4 sections:
+
+## 5. Contradictions
+Highlight any conflicting findings, opposing conclusions, or divergent experimental results between studies.
+
+## 6. Research Gaps
+Detail specific unaddressed research gaps, missing benchmark evaluations, or unexplored application areas.
+
+## 7. Future Directions
+Outline strategic open problems and recommended research avenues for future academic work.
+
+## 8. Novel Paper Suggestions
+Propose 2 to 3 novel, concrete, and actionable student/researcher paper project concepts.
+
+RULES:
+- Clean academic tone. No emojis or casual symbols.
+- Format citations as `[Paper Title, Year](URL)` using the exact URL in the context.
+
+CONTEXT:
+{context}
+"""
+
+            p1_chain = ChatPromptTemplate.from_template(batch_1_prompt) | llm | StrOutputParser()
+            p2_chain = ChatPromptTemplate.from_template(batch_2_prompt) | llm | StrOutputParser()
+
+            part1 = p1_chain.invoke({"topic": topic, "context": compact_context})
+            part2 = p2_chain.invoke({"topic": topic, "context": compact_context})
+
+            notice = "> [NOTICE] Large context detected. Prompt was automatically split into 2 focused generation batches (Sections 1-4 and Sections 5-8) to bypass API token limit constraints.\n\n"
+            full_report = f"# Research Analysis & Gap Report: {topic}\n\n{notice}{part1.strip()}\n\n{part2.strip()}"
+
+            for p in self.paper_metadata_list:
+                title = p.get("title", "").strip()
+                url = p.get("url") or p.get("pdf_url") or ""
+                if title and url and len(title) > 4:
+                    escaped_title = re.escape(title)
+                    pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
+                    full_report = re.sub(pattern_bracket, rf'[\1]({url})', full_report)
+
+            return full_report
+        except Exception as err:
+            return f"Error: {str(err)}"
+
+    def generate_gap_report(
+        self,
+        topic: str,
+        provider: str = "groq",
+        model_name: str = "openai/gpt-oss-120b",
+        api_key: Optional[str] = None
+    ) -> str:
+        if not self.vector_store:
+            return "Error: No papers indexed in vector store. Please fetch or upload papers first."
+
+        fallback_candidates = [
+            (provider, model_name),
+            ("groq", "llama-3.3-70b-versatile"),
+            ("groq", "llama3-8b-8192"),
+            ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
+            ("openrouter", "google/gemma-2-9b-it:free"),
+            ("cerebras", "llama3.3-70b"),
+            ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
+            ("gemini", "gemini-3.6-flash"),
+        ]
+
+        seen = set()
+        unique_candidates = []
+        for p_cand, m_cand in fallback_candidates:
+            key = (p_cand.lower(), m_cand.lower())
+            if key not in seen:
+                seen.add(key)
+                unique_candidates.append((p_cand, m_cand))
+
+        for idx, (p_curr, m_curr) in enumerate(unique_candidates):
+            res = self._try_single_generation(topic, p_curr, m_curr, api_key)
+            if res and not res.startswith("ERROR:"):
+                if idx > 0:
+                    notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`**, which successfully synthesized your 8-layer research report.\n\n"
+                    res = notice + res
+                return res
+
+            res_split = self._generate_split_gap_report(topic, p_curr, m_curr, api_key)
+            if res_split and not res_split.startswith("Error"):
+                if idx > 0:
+                    notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`** (with prompt splitting), which successfully synthesized your 8-layer research report.\n\n"
+                    res_split = notice + res_split
+                return res_split
+
+        return (
+            f"> [ALL MODELS EXHAUSTED] All AI model providers (Groq, OpenRouter, Cerebras, SambaNova, Gemini) were unable to process the request due to API rate limits or quota constraints.\n\n"
+            f"**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again."
+        )
 
     def ask_followup(
         self,
@@ -331,7 +475,7 @@ Answer (with exact source citations and paper hyperlinks):"""
                 p_title = d.metadata.get('paper_title', 'Paper')
                 p_sec = d.metadata.get('section', 'Section')
                 p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
-                formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content}")
+                formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content[:500]}")
             return "\n\n".join(formatted)
 
         rag_chain = (
