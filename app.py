@@ -232,6 +232,7 @@ with col_analyze_btn:
     run_analysis = st.button("Run Multi-Paper Gap Analysis", type="primary", use_container_width=True, disabled=(total_active == 0))
 
 if run_analysis:
+    st.session_state.chat_history = []
     if total_active == 0:
         st.error("Please select or upload at least one paper before running analysis.")
     else:

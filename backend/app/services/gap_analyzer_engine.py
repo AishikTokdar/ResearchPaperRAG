@@ -263,6 +263,48 @@ class GapAnalyzerEngine:
             ]
         return [self._get_llm_with_key(provider=provider, model_name=model_name, api_key=api_key)]
 
+    def _get_balanced_documents(self, query: str, top_k_per_paper: int = 3, max_total_docs: int = 15) -> List[Document]:
+        if not self.vector_store and not self.documents:
+            return []
+
+        candidate_docs: List[Document] = []
+        if self.vector_store:
+            try:
+                candidate_docs = self.vector_store.similarity_search(query, k=30)
+            except Exception:
+                candidate_docs = list(self.documents[:30])
+        else:
+            candidate_docs = list(self.documents[:30])
+
+        paper_docs_map: Dict[str, List[Document]] = {}
+        for d in candidate_docs:
+            p_title = d.metadata.get("paper_title") or d.metadata.get("source") or "Unknown Paper"
+            if p_title not in paper_docs_map:
+                paper_docs_map[p_title] = []
+            paper_docs_map[p_title].append(d)
+
+        for p in self.paper_metadata_list:
+            title = p.get("title")
+            if title and (title not in paper_docs_map or len(paper_docs_map[title]) == 0):
+                matching = [d for d in self.documents if d.metadata.get("paper_title") == title]
+                if matching:
+                    paper_docs_map[title] = matching[:top_k_per_paper]
+
+        balanced_docs: List[Document] = []
+        paper_titles = list(paper_docs_map.keys())
+
+        for i in range(top_k_per_paper):
+            for p_title in paper_titles:
+                docs_for_title = paper_docs_map[p_title]
+                if i < len(docs_for_title):
+                    balanced_docs.append(docs_for_title[i])
+                    if len(balanced_docs) >= max_total_docs:
+                        break
+            if len(balanced_docs) >= max_total_docs:
+                break
+
+        return balanced_docs if balanced_docs else candidate_docs[:max_total_docs]
+
     def _get_llm(self, provider: str = "gemini", model_name: str = "gemini-3.6-flash", api_key: Optional[str] = None):
         return self._get_llm_with_key(provider=provider, model_name=model_name, api_key=api_key)
 
@@ -278,21 +320,24 @@ class GapAnalyzerEngine:
 
         for llm in llms:
             try:
-                retriever = self.vector_store.as_retriever(search_kwargs={"k": 4})
-                retrieved_docs = retriever.invoke(f"Research gaps trends methods limitations contradictions for {topic}")
-
-            formatted_context_items = []
-            for d in retrieved_docs:
-                paper_title = d.metadata.get("paper_title", "Unknown")
-                section = d.metadata.get("section", "Section N/A")
-                year = d.metadata.get("year", "")
-                url = d.metadata.get("source", "") or d.metadata.get("url", "")
-                formatted_context_items.append(
-                    f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()[:500]}"
+                retrieved_docs = self._get_balanced_documents(
+                    f"Research gaps trends methods limitations contradictions for {topic}",
+                    top_k_per_paper=3,
+                    max_total_docs=15
                 )
-            formatted_context = "\n\n".join(formatted_context_items)
 
-            system_prompt = """You are an expert academic research assistant.
+                formatted_context_items = []
+                for d in retrieved_docs:
+                    paper_title = d.metadata.get("paper_title", "Unknown")
+                    section = d.metadata.get("section", "Section N/A")
+                    year = d.metadata.get("year", "")
+                    url = d.metadata.get("source", "") or d.metadata.get("url", "")
+                    formatted_context_items.append(
+                        f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()[:500]}"
+                    )
+                formatted_context = "\n\n".join(formatted_context_items)
+
+                system_prompt = """You are an expert academic research assistant.
 Analyze the provided research papers context for the topic: "{topic}".
 
 Generate a comprehensive, professional Markdown research report formatted strictly into these 8 section headers:
@@ -335,21 +380,24 @@ RETRIEVED MULTI-PAPER CONTEXT:
 {context}
 """
 
-            prompt = ChatPromptTemplate.from_template(system_prompt)
-            chain = prompt | llm | StrOutputParser()
-            report = chain.invoke({"topic": topic, "context": formatted_context})
+                prompt = ChatPromptTemplate.from_template(system_prompt)
+                chain = prompt | llm | StrOutputParser()
+                report = chain.invoke({"topic": topic, "context": formatted_context})
 
-            for p in self.paper_metadata_list:
-                title = p.get("title", "").strip()
-                url = p.get("url") or p.get("pdf_url") or ""
-                if title and url and len(title) > 4:
-                    escaped_title = re.escape(title)
-                    pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
-                    report = re.sub(pattern_bracket, rf'[\1]({url})', report)
+                for p in self.paper_metadata_list:
+                    title = p.get("title", "").strip()
+                    url = p.get("url") or p.get("pdf_url") or ""
+                    if title and url and len(title) > 4:
+                        escaped_title = re.escape(title)
+                        pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
+                        report = re.sub(pattern_bracket, rf'[\1]({url})', report)
 
-            return report
-        except Exception as e:
-            return f"ERROR: {str(e)}"
+                return report
+            except Exception as err:
+                last_err = err
+                continue
+
+        return f"Error: {str(last_err)}"
 
     def _generate_split_gap_report(
         self,
@@ -363,8 +411,11 @@ RETRIEVED MULTI-PAPER CONTEXT:
 
         for llm in llms:
             try:
-                retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
-                retrieved_docs = retriever.invoke(f"Research literature trends methods limitations contradictions {topic}")
+                retrieved_docs = self._get_balanced_documents(
+                    f"Research literature trends methods limitations contradictions {topic}",
+                    top_k_per_paper=3,
+                    max_total_docs=15
+                )
 
                 formatted_context_items = []
                 for d in retrieved_docs:
@@ -496,7 +547,15 @@ CONTEXT:
 
         for llm in llms:
             try:
-                retriever = self.vector_store.as_retriever(search_kwargs={"k": 5})
+                retrieved_docs = self._get_balanced_documents(question, top_k_per_paper=3, max_total_docs=15)
+
+                formatted_context_items = []
+                for d in retrieved_docs:
+                    p_title = d.metadata.get('paper_title', 'Paper')
+                    p_sec = d.metadata.get('section', 'Section')
+                    p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
+                    formatted_context_items.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content[:500]}")
+                formatted_context = "\n\n".join(formatted_context_items)
 
                 prompt_template = """You are a research assistant answering follow-up questions about the analyzed research papers.
 Answer the user's question using ONLY the provided multi-paper context. Always cite the paper title for your statements.
@@ -510,24 +569,8 @@ Question: {question}
 Answer (with exact source citations and paper hyperlinks):"""
 
                 prompt = ChatPromptTemplate.from_template(prompt_template)
-
-                def format_docs(docs):
-                    formatted = []
-                    for d in docs:
-                        p_title = d.metadata.get('paper_title', 'Paper')
-                        p_sec = d.metadata.get('section', 'Section')
-                        p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
-                        formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content[:500]}")
-                    return "\n\n".join(formatted)
-
-                rag_chain = (
-                    {"context": retriever | format_docs, "question": RunnablePassthrough()}
-                    | prompt
-                    | llm
-                    | StrOutputParser()
-                )
-
-                answer = rag_chain.invoke(question)
+                chain = prompt | llm | StrOutputParser()
+                answer = chain.invoke({"context": formatted_context, "question": question})
 
                 for p in self.paper_metadata_list:
                     title = p.get("title", "").strip()

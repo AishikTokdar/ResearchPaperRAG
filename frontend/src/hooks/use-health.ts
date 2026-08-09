@@ -7,7 +7,7 @@ interface UseHealthReturn {
   status: HealthStatus;
 }
 
-const POLL_INTERVAL_MS = 12_000;
+const POLL_INTERVAL_MS = 60_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
 
 export function useHealth(): UseHealthReturn {

@@ -222,6 +222,8 @@ export function ChatPage() {
     }
 
     setReport(null);
+    setChatMessages([]);
+    setChatInput("");
     setIsAnalyzing(true);
     setActiveStepIndex(0);
 
@@ -644,9 +646,25 @@ export function ChatPage() {
             </div>
 
             <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-indigo-500" /> Grounded Interactive Follow-up Chat
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-indigo-500" /> Grounded Interactive Follow-up Chat
+                </h3>
+                {chatMessages.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setChatMessages([]);
+                      setChatInput("");
+                      toast.info("Follow-up chat history cleared.");
+                    }}
+                    className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Clear Chat
+                  </Button>
+                )}
+              </div>
               <p className="text-xs text-zinc-500">
                 Ask follow-up questions regarding common methods, contradictions, or research gaps. Answers cite exact papers and sections.
               </p>
