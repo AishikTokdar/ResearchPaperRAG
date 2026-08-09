@@ -512,19 +512,41 @@ function TableRenderer({ tableMarkdown }: { tableMarkdown: string }) {
   );
 }
 
+function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (
+    trimmed.startsWith("doi.org/") ||
+    trimmed.startsWith("dx.doi.org/") ||
+    trimmed.startsWith("arxiv.org/") ||
+    trimmed.startsWith("www.") ||
+    trimmed.startsWith("10.") ||
+    trimmed.includes(".org/") ||
+    trimmed.includes(".com/") ||
+    trimmed.includes(".edu/") ||
+    trimmed.includes(".pdf")
+  ) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
 function RichInlineText({ text }: { text: string }) {
   if (!text) return null;
 
   let cleaned = text.replace(/^#+\s*/, "");
-  // Sanitize double bracket links and strip internal chunk numbers (e.g. Chunk 19)
+  // Sanitize nested bracket links and strip internal chunk numbers (e.g. Chunk 19)
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]/gi, "[$1]($2)");
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]/g, "[$1]($2)");
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\]/g, "[$1]($2)");
+  cleaned = cleaned.replace(/\[\*\*([^*]+)\*\*\]\(([^)]+)\)/g, "[$1]($2)");
   cleaned = cleaned.replace(/\s*\|\s*Chunk\s*\d+/gi, "");
   cleaned = cleaned.replace(/\s*\(\s*Chunk\s*\d+\s*\)/gi, "");
   cleaned = cleaned.replace(/\[\s*Chunk\s*\d+\s*\]/gi, "");
 
-  const TOKEN_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\])/g;
+  const TOKEN_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`|\[([^\]]+)\])/g;
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -539,25 +561,34 @@ function RichInlineText({ text }: { text: string }) {
     const key = m.index;
 
     if (m[3] !== undefined) {
-      const linkText = m[2];
-      const linkUrl = m[3];
-      const isHttpUrl = linkUrl.startsWith("http");
+      const rawText = m[2].replace(/[\*\_]/g, "").trim();
+      const rawUrl = m[3].trim();
+      const finalUrl = normalizeUrl(rawUrl);
+      const isHttpUrl = finalUrl.startsWith("http://") || finalUrl.startsWith("https://");
+
       if (isHttpUrl) {
         parts.push(
           <a
             key={key}
-            href={linkUrl}
+            href={finalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-xs transition-colors my-0.5 mx-0.5"
-            title={`Open paper in a new tab`}
+            className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-xs transition-colors my-0.5 mx-0.5 break-all"
+            title="Open research paper in a new tab"
           >
-            <span>{linkText}</span>
+            <span>{rawText}</span>
             <ExternalLink className="w-3 h-3 inline shrink-0 text-indigo-500" />
           </a>
         );
       } else {
-        parts.push(<span key={key}>{full}</span>);
+        parts.push(
+          <span
+            key={key}
+            className="inline border border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium leading-normal mx-0.5 break-words"
+          >
+            [{rawText}]
+          </span>
+        );
       }
     } else if (m[4] !== undefined) {
       parts.push(
@@ -571,8 +602,14 @@ function RichInlineText({ text }: { text: string }) {
           {m[5]}
         </em>
       );
-    } else if (m[6] !== undefined && m[6].length > 1) {
-      const cleanCitationText = m[6].replace(/\*\*/g, "").trim();
+    } else if (m[6] !== undefined) {
+      parts.push(
+        <code key={key} className="px-1 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 font-mono text-xs text-indigo-600 dark:text-indigo-400">
+          {m[6]}
+        </code>
+      );
+    } else if (m[7] !== undefined && m[7].length > 1) {
+      const cleanCitationText = m[7].replace(/[\*\_]/g, "").trim();
       parts.push(
         <span
           key={key}

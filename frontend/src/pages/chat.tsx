@@ -110,6 +110,11 @@ export function ChatPage() {
   const [chatMessages, setChatMessages] = React.useState<ChatMessageItem[]>([]);
   const [chatInput, setChatInput] = React.useState("");
   const [isAsking, setIsAsking] = React.useState(false);
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, isAsking]);
 
   const defaultModel = AI_MODELS.find((m) => m.isDefault) ?? AI_MODELS[0];
   const [selectedModelObj, setSelectedModelObj] = React.useState<AIModel>(defaultModel);
@@ -670,43 +675,59 @@ export function ChatPage() {
               </p>
 
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                {chatMessages.length === 0 ? (
+                {chatMessages.length === 0 && !isAsking ? (
                   <div className="text-center py-6 text-xs text-zinc-400 italic">
                     Example: &ldquo;Which contradiction between paper 1 and paper 2 requires further dataset benchmarking?&rdquo;
                   </div>
                 ) : (
-                  chatMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex gap-3 text-xs sm:text-sm ${
-                        msg.sender === "user" ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      {msg.sender === "assistant" && (
+                  <>
+                    {chatMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex gap-3 text-xs sm:text-sm ${
+                          msg.sender === "user" ? "justify-end" : "justify-start"
+                        }`}
+                      >
+                        {msg.sender === "assistant" && (
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0">
+                            <Bot className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+                          </div>
+                        )}
+                        <div
+                          className={`p-3.5 rounded-2xl max-w-[85%] leading-relaxed ${
+                            msg.sender === "user"
+                              ? "bg-indigo-600 text-white rounded-br-none"
+                              : "bg-zinc-100 dark:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 rounded-bl-none border border-zinc-200 dark:border-zinc-700"
+                          }`}
+                        >
+                          {msg.sender === "user" ? (
+                            msg.text
+                          ) : (
+                            <FormattedBlock text={msg.text} />
+                          )}
+                        </div>
+                        {msg.sender === "user" && (
+                          <div className="w-7 h-7 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center shrink-0">
+                            <User className="w-4 h-4" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {isAsking && (
+                      <div className="flex gap-3 text-xs sm:text-sm justify-start">
                         <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0">
                           <Bot className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                         </div>
-                      )}
-                      <div
-                        className={`p-3.5 rounded-2xl max-w-[85%] leading-relaxed ${
-                          msg.sender === "user"
-                            ? "bg-indigo-600 text-white rounded-br-none"
-                            : "bg-zinc-100 dark:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 rounded-bl-none border border-zinc-200 dark:border-zinc-700"
-                        }`}
-                      >
-                        {msg.sender === "user" ? (
-                          msg.text
-                        ) : (
-                          <FormattedBlock text={msg.text} />
-                        )}
-                      </div>
-                      {msg.sender === "user" && (
-                        <div className="w-7 h-7 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center shrink-0">
-                          <User className="w-4 h-4" />
+                        <div className="px-4 py-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-800/90 rounded-bl-none border border-zinc-200 dark:border-zinc-700 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce [animation-delay:-0.3s]" />
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce [animation-delay:-0.15s]" />
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce" />
                         </div>
-                      )}
-                    </div>
-                  ))
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </>
                 )}
               </div>
 
