@@ -242,8 +242,8 @@ export const api = {
 
   async analyzeGaps(
     topic: string,
-    provider: string = "ollama",
-    modelName: string = "mistral",
+    provider: string = "gemini",
+    modelName: string = "gemini-3.6-flash",
     apiKey?: string,
   ): Promise<AnalyzeGapsResponse> {
     return fetchWithErrorHandling<AnalyzeGapsResponse>(
@@ -263,8 +263,8 @@ export const api = {
 
   async chatFollowup(
     question: string,
-    provider: string = "ollama",
-    modelName: string = "mistral",
+    provider: string = "gemini",
+    modelName: string = "gemini-3.6-flash",
     apiKey?: string,
   ): Promise<ChatFollowupResponse> {
     return fetchWithErrorHandling<ChatFollowupResponse>(

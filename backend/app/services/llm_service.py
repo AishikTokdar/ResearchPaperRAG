@@ -24,6 +24,7 @@ from ..config import (
     AI_PROVIDERS,
     PROVIDER_PRIORITY,
     AIProvider,
+    get_all_groq_api_keys,
     get_default_provider,
     get_settings,
     provider_has_credentials,
@@ -97,8 +98,18 @@ Answer: """
             return provider.api_key or s.hf_api_key
         return provider.api_key
 
+    def _resolve_llm_api_keys(self, provider: AIProvider) -> list[str]:
+        keys = get_all_provider_api_keys(provider.name, provider.api_key)
+        if keys:
+            return keys
+        key = self._resolve_llm_api_key(provider)
+        return [key] if key else ["placeholder"]
+
     def _build_llm(self, provider: AIProvider, model_id: str) -> ChatOpenAI:
-        """Create a ChatOpenAI instance pointing at the given provider."""
+        return self._build_llm_with_key(provider, model_id, self._resolve_llm_api_key(provider))
+
+    def _build_llm_with_key(self, provider: AIProvider, model_id: str, api_key: str | None = None) -> ChatOpenAI:
+        """Create a ChatOpenAI instance pointing at the given provider with specific key."""
         base_url = (
             self.settings.openrouter_api_base
             if provider.name == "openrouter"
@@ -106,7 +117,7 @@ Answer: """
         )
         return ChatOpenAI(
             base_url=base_url,
-            api_key=cast(Any, self._resolve_llm_api_key(provider)),
+            api_key=cast(Any, api_key or self._resolve_llm_api_key(provider) or "placeholder"),
             model=model_id,
             temperature=self.settings.temperature,
             max_tokens=self.settings.max_tokens,  # pyright: ignore[reportCallIssue]
@@ -187,20 +198,22 @@ Answer: """
         failed_models: list[str] = []
 
         for provider, model_id in attempts:
-            try:
-                if failed_models:
-                    logger.info(
-                        "Failover switch: previous attempts %s failed. Trying provider %s (%s)...",
-                        failed_models, provider.name, model_id,
-                    )
-                llm = self._build_llm(provider, model_id)
-                chain = prompt | llm | StrOutputParser()
-                answer = chain.invoke(payload)
-                logger.info("LLM succeeded: %s / %s", provider.name, model_id)
-                return answer, model_id
-            except Exception as exc:
-                failed_models.append(f"{provider.name}/{model_id}")
-                logger.warning("LLM %s/%s failed: %s", provider.name, model_id, exc)
+            keys = self._resolve_llm_api_keys(provider)
+            for key in keys:
+                try:
+                    if failed_models:
+                        logger.info(
+                            "Failover switch: previous attempts %s failed. Trying provider %s (%s)...",
+                            failed_models, provider.name, model_id,
+                        )
+                    llm = self._build_llm_with_key(provider, model_id, key)
+                    chain = prompt | llm | StrOutputParser()
+                    answer = chain.invoke(payload)
+                    logger.info("LLM succeeded: %s / %s", provider.name, model_id)
+                    return answer, model_id
+                except Exception as exc:
+                    failed_models.append(f"{provider.name}/{model_id}")
+                    logger.warning("LLM %s/%s key attempt failed: %s", provider.name, model_id, exc)
 
         raise RuntimeError(
             f"All configured AI providers ({', '.join(failed_models)}) failed. "
@@ -273,39 +286,41 @@ Answer: """
         failed_models: list[str] = []
 
         for idx, (provider, model_id) in enumerate(attempts):
-            if idx > 0:
-                yield {
-                    "type": "status",
-                    "stage": "failover",
-                    "message": f"Switching AI provider: Previous model failed. Trying {provider.name.title()} ({model_id.split('/')[-1]})...",
-                    "provider": provider.name,
-                    "model": model_id,
-                }
+            keys = self._resolve_llm_api_keys(provider)
+            for k_idx, key in enumerate(keys):
+                if idx > 0 or k_idx > 0:
+                    yield {
+                        "type": "status",
+                        "stage": "failover",
+                        "message": f"Switching AI provider: Previous attempt failed. Trying {provider.name.title()} ({model_id.split('/')[-1]})...",
+                        "provider": provider.name,
+                        "model": model_id,
+                    }
 
-            try:
-                llm = self._build_llm(provider, model_id)
-                chain = prompt | llm | StrOutputParser()
-                got_tokens = False
+                try:
+                    llm = self._build_llm_with_key(provider, model_id, key)
+                    chain = prompt | llm | StrOutputParser()
+                    got_tokens = False
 
-                async for chunk in chain.astream(payload):
-                    text = chunk if isinstance(chunk, str) else str(chunk)
-                    if text:
-                        got_tokens = True
-                        yield {
-                            "type": "token",
-                            "content": text,
-                            "model_used": model_id,
-                        }
+                    async for chunk in chain.astream(payload):
+                        text = chunk if isinstance(chunk, str) else str(chunk)
+                        if text:
+                            got_tokens = True
+                            yield {
+                                "type": "token",
+                                "content": text,
+                                "model_used": model_id,
+                            }
 
-                if got_tokens:
-                    logger.info("LLM stream succeeded: %s / %s", provider.name, model_id)
-                    yield {"type": "complete", "model_used": model_id}
-                    return
-            except Exception as exc:
-                failed_models.append(f"{provider.name}/{model_id}")
-                logger.warning(
-                    "LLM stream %s/%s failed: %s", provider.name, model_id, exc
-                )
+                    if got_tokens:
+                        logger.info("LLM stream succeeded: %s / %s", provider.name, model_id)
+                        yield {"type": "complete", "model_used": model_id}
+                        return
+                except Exception as exc:
+                    failed_models.append(f"{provider.name}/{model_id}")
+                    logger.warning(
+                        "LLM stream %s/%s failed: %s", provider.name, model_id, exc
+                    )
 
         raise RuntimeError(
             f"All configured AI providers ({', '.join(failed_models)}) failed. "

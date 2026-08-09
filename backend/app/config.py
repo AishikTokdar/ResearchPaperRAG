@@ -5,6 +5,7 @@ Manages environment variables, API keys, and provider configurations.
 """
 
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -93,12 +94,14 @@ AI_PROVIDERS: dict[str, AIProvider] = {
         base_url="https://api.groq.com/openai/v1",
         api_key_env="GROQ_API_KEY",
         models=[
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "qwen/qwen3.6-27b",
+            "mixtral-8x7b-32768",
+            "deepseek-r1-distill-llama-70b",
             "openai/gpt-oss-120b",
             "openai/gpt-oss-20b",
             "openai/gpt-oss-safeguard-20b",
-            "qwen/qwen3.6-27b",
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
         ],
         embedding_model=None,
     ),
@@ -158,7 +161,7 @@ AI_PROVIDERS: dict[str, AIProvider] = {
 
 # Ordered priority for automatic free failover attempts
 PROVIDER_PRIORITY: list[str] = [
-    "groq", "gemini", "cerebras", "sambanova", "huggingface", "openrouter",
+    "gemini", "cerebras", "sambanova", "groq", "huggingface", "openrouter",
 ]
 
 
@@ -184,7 +187,14 @@ class Settings(BaseSettings):
         default="https://openrouter.ai/api/v1",
         validation_alias=AliasChoices("OPENROUTER_API_BASE", "OPENAI_API_BASE"),
     )
-    groq_api_key: str | None = None
+    groq_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GROQ_API_KEY", "GROQ_API_KEYS"),
+    )
+    groq_api_keys: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GROQ_API_KEYS"),
+    )
     google_api_key: str | None = None
     hf_api_key: str | None = None
     openai_direct_api_key: str | None = None
@@ -195,8 +205,8 @@ class Settings(BaseSettings):
     embedding_openai_direct: bool = Field(default=False)
 
     # Default AI settings
-    default_model: str = "openai/gpt-oss-120b"
-    default_provider: str = "groq"
+    default_model: str = "gemini-3.6-flash"
+    default_provider: str = "gemini"
     temperature: float = 0.0
     max_tokens: int = 2048
 
@@ -248,20 +258,85 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def provider_has_credentials(provider: AIProvider) -> bool:
-    """True if LLM calls can authenticate (env + pydantic Settings)."""
+def get_all_provider_api_keys(provider_name: str, custom_key: str | None = None) -> list[str]:
+    """
+    Extract all API keys for any given provider from:
+    1. Custom passed API key (single string or comma/semicolon/space-separated list)
+    2. Settings & Environment variables for that provider (single or comma-separated)
+    
+    Supports env variables:
+    - gemini: GOOGLE_API_KEY, GOOGLE_API_KEYS, GEMINI_API_KEY, GEMINI_API_KEYS
+    - groq: GROQ_API_KEY, GROQ_API_KEYS
+    - cerebras: CEREBRAS_API_KEY, CEREBRAS_API_KEYS
+    - sambanova: SAMBANOVA_API_KEY, SAMBANOVA_API_KEYS
+    - huggingface: HF_API_KEY, HF_API_KEYS, HUGGINGFACE_API_KEY
+    - openrouter: OPENROUTER_API_KEY, OPENROUTER_API_KEYS, OPENAI_API_KEY
+    - openai: OPENAI_DIRECT_API_KEY, OPENAI_API_KEY
+    
+    Returns a list of unique non-empty key strings.
+    """
     settings = get_settings()
-    if provider.name == "openrouter":
-        return bool(provider.api_key or settings.openrouter_api_key)
-    if provider.name == "openai":
-        return bool(provider.api_key or settings.openai_direct_api_key)
-    if provider.name == "groq":
-        return bool(provider.api_key or settings.groq_api_key)
-    if provider.name == "gemini":
-        return bool(provider.api_key or settings.google_api_key)
-    if provider.name == "huggingface":
-        return bool(provider.api_key or settings.hf_api_key)
-    return bool(provider.api_key)
+    keys: list[str] = []
+    seen: set[str] = set()
+
+    def add_key_str(raw: str | None):
+        if not raw:
+            return
+        for part in re.split(r'[,;\s]+', raw):
+            k = part.strip()
+            if k and k not in seen:
+                seen.add(k)
+                keys.append(k)
+
+    add_key_str(custom_key)
+
+    pname = (provider_name or "").lower().strip()
+    if pname == "gemini":
+        add_key_str(settings.google_api_key)
+        add_key_str(os.getenv("GOOGLE_API_KEYS"))
+        add_key_str(os.getenv("GOOGLE_API_KEY"))
+        add_key_str(os.getenv("GEMINI_API_KEYS"))
+        add_key_str(os.getenv("GEMINI_API_KEY"))
+    elif pname == "groq":
+        add_key_str(getattr(settings, "groq_api_keys", None))
+        add_key_str(settings.groq_api_key)
+        add_key_str(os.getenv("GROQ_API_KEYS"))
+        add_key_str(os.getenv("GROQ_API_KEY"))
+    elif pname == "cerebras":
+        add_key_str(os.getenv("CEREBRAS_API_KEYS"))
+        add_key_str(os.getenv("CEREBRAS_API_KEY"))
+    elif pname == "sambanova":
+        add_key_str(os.getenv("SAMBANOVA_API_KEYS"))
+        add_key_str(os.getenv("SAMBANOVA_API_KEY"))
+    elif pname == "huggingface":
+        add_key_str(settings.hf_api_key)
+        add_key_str(os.getenv("HF_API_KEYS"))
+        add_key_str(os.getenv("HF_API_KEY"))
+        add_key_str(os.getenv("HUGGINGFACE_API_KEY"))
+    elif pname == "openrouter":
+        add_key_str(settings.openrouter_api_key)
+        add_key_str(os.getenv("OPENROUTER_API_KEYS"))
+        add_key_str(os.getenv("OPENROUTER_API_KEY"))
+        add_key_str(os.getenv("OPENAI_API_KEY"))
+    elif pname == "openai":
+        add_key_str(settings.openai_direct_api_key)
+        add_key_str(os.getenv("OPENAI_API_KEY"))
+    else:
+        env_base = pname.upper()
+        add_key_str(os.getenv(f"{env_base}_API_KEYS"))
+        add_key_str(os.getenv(f"{env_base}_API_KEY"))
+
+    return keys
+
+
+def get_all_groq_api_keys(custom_key: str | None = None) -> list[str]:
+    """Backward-compatible helper for Groq API keys."""
+    return get_all_provider_api_keys("groq", custom_key)
+
+
+def provider_has_credentials(provider: AIProvider) -> bool:
+    """True if LLM calls can authenticate (env + pydantic Settings + multi-keys)."""
+    return bool(get_all_provider_api_keys(provider.name, provider.api_key))
 
 
 def get_available_providers() -> list[str]:

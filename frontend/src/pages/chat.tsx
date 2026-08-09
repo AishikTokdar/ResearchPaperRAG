@@ -120,8 +120,9 @@ export function ChatPage() {
   const handleSaveModel = () => {
     setActiveModelObj(selectedModelObj);
     setReport(null);
+    setChatMessages([]);
     setActiveStepIndex(-1);
-    toast.success(`Active AI Model Saved: ${selectedModelObj.name} (${selectedModelObj.provider.toUpperCase()}). Pipeline reset for new model.`);
+    toast.success(`Active AI Model Saved: ${selectedModelObj.name} (${selectedModelObj.provider.toUpperCase()}). Pipeline and chat reset for new model.`);
   };
 
   const handleSearch = async (e?: React.FormEvent) => {

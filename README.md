@@ -28,7 +28,7 @@ The platform incorporates an interactive Research Gap Analyzer SPA powered by a 
 7. Local Quickstart & Execution Guide
 8. Production Deployment with Gunicorn & Uvicorn
 9. Docker & Containerization Guide
-10. Cloud Deployment Options (Hugging Face Spaces Backend & Vercel Frontend)
+10. Cloud Deployment Options (Hugging Face Spaces Backend & Vercel / Cloudflare Pages Frontend)
 11. REST API Reference & OpenAPI Specification
 12. Troubleshooting & FAQs
 13. Tech Stack Summary
@@ -65,7 +65,13 @@ Following the 8-layer report synthesis, users can conduct follow-up Q&A strictly
 - Plain Text Export (.txt): Strips markdown symbols for unformatted text logging.
 
 ### 7. Internal AI Model Selector & Save Action Bar
-Redesigned model management bar eliminates raw text input boxes and manual API key fields. Users select from a pre-configured 27-model registry, click "Save Model", and receive instant toast notifications (Active AI Model Saved: Llama 3.3 70B Versatile (GROQ)) and UI badges.
+Redesigned model management bar eliminates raw text input boxes and manual API key fields. Users select from a pre-configured 27-model registry, click "Save Model", and receive instant toast notifications. Switching models automatically resets both the 8-layer gap report and the follow-up chat session.
+
+### 8. Universal Multi-Key Pooling & Rotation
+Supplies comma-separated or space-separated API keys (`KEY_1,KEY_2,KEY_3`) across **all AI providers** (Google Gemini, Groq, Cerebras, SambaNova, Hugging Face, OpenRouter). When a key encounters 429 Rate Limits, the engine rotates instantly to the next key in the pool.
+
+### 9. All-Model Failover Chain & Zero Error Leakage
+If a primary model fails, the fallback engine automatically traverses **all 30+ AI models** across all credentialed providers in priority order. If all models and keys fail, the UI displays a clean, user-friendly Markdown notice without leaking raw 500 error tracebacks.
 
 ---
 
@@ -173,41 +179,41 @@ When papers are ingested, ResearchPaperRAG executes cross-document retrieval and
 
 ## Obtaining & Configuring Free AI API Keys
 
-ResearchPaperRAG requires at least one free provider API key to perform LLM synthesis. Groq Cloud is configured as the default provider.
+ResearchPaperRAG requires at least one free provider API key to perform LLM synthesis. Gemini and Groq are configured as recommended defaults. **All providers support multi-key pooling**: pass single keys or comma-separated lists (`KEY_1,KEY_2,KEY_3`) to automatically rotate keys on 429 rate limits.
 
-### 1. Groq Cloud API Key (GROQ_API_KEY) — Recommended Default
-- Available Models: llama-3.3-70b-versatile, deepseek-r1-distill-llama-70b, gemma2-9b-it.
-- How to Obtain:
-  1. Visit Groq Console (https://console.groq.com/).
+### 1. Google Gemini API Key (GOOGLE_API_KEY) — Recommended Default
+- Available Models: gemini-3.6-flash, gemini-3.5-flash-lite, gemini-2.5-flash, gemini-2.5-pro.
+- How to Obtain & Multi-Key Support:
+  1. Visit [Google AI Studio](https://aistudio.google.com/).
+  2. Click Get API Key -> Create API key.
+  3. Set in `backend/.env`: `GOOGLE_API_KEY=AIzaSy...` (or comma-separated: `GOOGLE_API_KEY=AIza_key1,AIza_key2`).
+
+### 2. Groq Cloud API Key (GROQ_API_KEY) — Free LPU Acceleration
+- Available Models: llama-3.3-70b-versatile, llama-3.1-8b-instant, qwen/qwen3.6-27b, mixtral-8x7b-32768, deepseek-r1-distill-llama-70b, openai/gpt-oss-120b.
+- How to Obtain & Multi-Key Support:
+  1. Visit [Groq Console](https://console.groq.com/).
   2. Sign in with Google/GitHub and navigate to API Keys.
   3. Click Create API Key and copy your key.
-  4. Set in backend/.env: GROQ_API_KEY=gsk_...
-
-### 2. Google Gemini API Key (GOOGLE_API_KEY)
-- Available Models: gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash-exp.
-- How to Obtain:
-  1. Visit Google AI Studio (https://aistudio.google.com/).
-  2. Click Get API Key -> Create API key in new project.
-  3. Set in backend/.env: GOOGLE_API_KEY=AIzaSy...
+  4. Set in `backend/.env`: `GROQ_API_KEY=gsk_key1` (or comma-separated for multi-key rotation: `GROQ_API_KEY=gsk_key1,gsk_key2,gsk_key3`).
 
 ### 3. OpenRouter Free Tier Key (OPENROUTER_API_KEY)
-- Available Models: meta-llama/llama-3.3-70b-instruct:free, deepseek/deepseek-r1:free, qwen/qwen-2.5-72b-instruct:free.
-- How to Obtain:
-  1. Visit OpenRouter Keys (https://openrouter.ai/keys).
+- Available Models: openrouter/free, google/gemini-3.1-flash-lite:free, qwen/qwen3.5-27b:free, meta-llama/llama-3.3-70b-instruct:free.
+- How to Obtain & Multi-Key Support:
+  1. Visit [OpenRouter Keys](https://openrouter.ai/keys).
   2. Click Create Key and copy.
-  3. Set in backend/.env: OPENROUTER_API_KEY=sk-or-v1-...
+  3. Set in `backend/.env`: `OPENROUTER_API_KEY=sk-or-v1-...` (or comma-separated: `OPENROUTER_API_KEY=sk-or-1,sk-or-2`).
 
 ### 4. Cerebras Wafer-Scale Engine Key (CEREBRAS_API_KEY)
-- Available Models: llama3.3-70b, llama3.1-8b.
-- How to Obtain: Visit Cerebras Cloud Console (https://cloud.cerebras.ai/) and create a key.
+- Available Models: llama3.3-70b, llama3.1-8b, gpt-oss-120b.
+- How to Obtain: Visit [Cerebras Cloud Console](https://cloud.cerebras.ai/) and create key(s). Accepts single or comma-separated keys.
 
 ### 5. SambaNova Cloud Key (SAMBANOVA_API_KEY)
 - Available Models: Meta-Llama-3.3-70B-Instruct, DeepSeek-R1-Distill-Llama-70B.
-- How to Obtain: Visit SambaNova Cloud (https://cloud.sambanova.ai/) and generate a key.
+- How to Obtain: Visit [SambaNova Cloud](https://cloud.sambanova.ai/) and generate key(s). Accepts single or comma-separated keys.
 
 ### 6. Hugging Face Access Token (HF_API_KEY)
-- Available Models: Qwen/Qwen2.5-Coder-32B-Instruct, mistralai/Mistral-7B-Instruct-v0.3.
-- How to Obtain: Visit Hugging Face Tokens (https://huggingface.co/settings/tokens) and generate a Read token.
+- Available Models: google/gemma-4-31b-it, Qwen/Qwen3.5-27B, meta-llama/Meta-Llama-3-8B-Instruct.
+- How to Obtain: Visit [Hugging Face Tokens](https://huggingface.co/settings/tokens) and generate token(s). Accepts single or comma-separated tokens.
 
 ---
 
@@ -223,12 +229,12 @@ ENVIRONMENT=production
 CORS_ORIGINS=*
 
 # DEFAULT PROVIDER & MODEL SELECTION
-DEFAULT_PROVIDER=groq
-DEFAULT_MODEL=llama-3.3-70b-versatile
+DEFAULT_PROVIDER=gemini
+DEFAULT_MODEL=gemini-3.6-flash
 
-# AI PROVIDER API KEYS (Configure at least one)
-GROQ_API_KEY=your_groq_api_key_here
+# AI PROVIDER API KEYS (Configure single key or comma-separated key pools)
 GOOGLE_API_KEY=your_google_gemini_api_key_here
+GROQ_API_KEY=key_1,key_2,key_3
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 CEREBRAS_API_KEY=your_cerebras_api_key_here
 SAMBANOVA_API_KEY=your_sambanova_api_key_here
@@ -401,10 +407,10 @@ Deploying the Python FastAPI backend on Hugging Face Spaces provides free hostin
      - `HF_API_KEY`: Your Hugging Face user access token (`hf_...`)
 
    - **Variables** (Add public runtime configuration):
-     - `DEFAULT_PROVIDER`: `groq`
-     - `DEFAULT_MODEL`: `llama-3.3-70b-versatile`
+     - `DEFAULT_PROVIDER`: `gemini`
+     - `DEFAULT_MODEL`: `gemini-3.6-flash`
      - `ENVIRONMENT`: `production`
-     - `CORS_ORIGINS`: `*` (or your deployed Vercel URL)
+     - `CORS_ORIGINS`: `*` (or your deployed Vercel / Cloudflare Pages URL)
 
 4. **Verify Deployment & Obtain Public URL**:
    - Once Hugging Face finishes building the Space, the FastAPI backend will be live.
@@ -443,6 +449,41 @@ Deploying the React 18 SPA frontend on Vercel distributes your user interface ac
    - Open your Vercel URL in your browser.
    - Navigate to `/chat` and execute a topic search across academic APIs.
    - The React app will make REST API calls to your Hugging Face Space backend, synthesize 8-layer gap reports, and run grounded follow-up chat.
+
+---
+
+### Part C: Alternative Frontend Deployment on Cloudflare Pages
+
+Deploying the React 18 SPA frontend on Cloudflare Pages provides ultra-fast static hosting on Cloudflare's global edge network.
+
+#### Step-by-Step Instructions:
+
+1. **Connect Repository to Cloudflare Pages**:
+   - Log in to your [Cloudflare Dashboard](https://dash.cloudflare.com/) and navigate to **Workers & Pages** -> **Create application** -> **Pages** tab -> **Connect to Git**.
+   - Select your GitHub account and choose the `ResearchPaperRAG` repository.
+
+2. **Configure Build & Deployment Settings**:
+   - **Project Name**: `researchpaperrag`
+   - **Production Branch**: `main`
+   - **Framework Preset**: Select **Vite** (or **None**).
+   - Expand **Root Directory (advanced)**:
+     - **Path**: `frontend`
+   - **Build Command**: `npm run build`
+   - **Build Output Directory**: `dist`
+
+3. **Configure Environment Variables**:
+   Expand **Environment Variables (advanced)**:
+   - **Variable Name**: `VITE_API_BASE_URL`
+   - **Value**: `https://YOUR_USERNAME-researchpaperrag-backend.hf.space` *(Replace with your live backend API URL from Part A)*
+   - Ensure the variable is added under **Production** (and **Preview** if deploying PRs).
+
+4. **Deploy**:
+   - Click **Save and Deploy**.
+   - Cloudflare Pages will compile TypeScript, bundle frontend assets with Vite, and publish your production site to a custom URL (e.g. `https://researchpaperrag.pages.dev`).
+
+5. **Troubleshooting Environment Variables on Cloudflare Pages**:
+   - Cloudflare Pages bakes environment variables into static JS bundles **at build time**. If you add or update `VITE_API_BASE_URL` after creating the project, go to **Deployments** -> **`...`** (three dots) -> **Retry deployment** for the changes to take effect.
+   - SPA client-side routing (e.g. direct page refresh on `/chat` or `/dashboard`) is automatically enabled via the bundled `frontend/public/_redirects` file (`/* /index.html 200`).
 
 ---
 

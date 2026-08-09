@@ -176,35 +176,17 @@ export interface AIModel {
 
 export const AI_MODELS: AIModel[] = [
   {
-    id: "openai/gpt-oss-120b",
-    name: "GPT-OSS 120B (Groq)",
-    provider: "groq",
-    description: "Free tier via Google AI Studio — ultra fast & accurate",
-    isDefault: true,
-  },
-  {
-    id: "openai/gpt-oss-20b",
-    name: "GPT-OSS 20B (Groq)",
-    provider: "groq",
-    description: "Free tier lightweight Gemini model",
-  },
-  {
-    id: "qwen/qwen3.6-27b",
-    name: "Qwen 3.6 27B (Groq)",
-    provider: "groq",
-    description: "Free tier high reasoning model",
-  },
-  {
     id: "gemini-3.6-flash",
     name: "Gemini 3.6 Flash",
     provider: "gemini",
-    description: "Free tier stable 2.0 release",
+    description: "Free tier via Google AI Studio — ultra fast & accurate",
+    isDefault: true,
   },
   {
     id: "gemini-3.5-flash-lite",
     name: "Gemini 3.5 Flash-Lite",
     provider: "gemini",
-    description: "Free tier fast 1.5 model",
+    description: "Free tier fast lightweight model",
   },
   {
     id: "llama-3.3-70b-versatile",
@@ -219,6 +201,12 @@ export const AI_MODELS: AIModel[] = [
     description: "Free instant LPU responses for general Q&A",
   },
   {
+    id: "qwen/qwen3.6-27b",
+    name: "Qwen 3.6 27B (Groq)",
+    provider: "groq",
+    description: "Free high reasoning model on Groq",
+  },
+  {
     id: "mixtral-8x7b-32768",
     name: "Mixtral 8x7B (Groq)",
     provider: "groq",
@@ -229,6 +217,18 @@ export const AI_MODELS: AIModel[] = [
     name: "DeepSeek R1 70B (Groq)",
     provider: "groq",
     description: "Free reasoning model on Groq LPU",
+  },
+  {
+    id: "openai/gpt-oss-120b",
+    name: "GPT-OSS 120B (Groq)",
+    provider: "groq",
+    description: "Free LPU inference on Groq Cloud",
+  },
+  {
+    id: "openai/gpt-oss-20b",
+    name: "GPT-OSS 20B (Groq)",
+    provider: "groq",
+    description: "Free lightweight model on Groq",
   },
   {
     id: "llama3.3-70b",

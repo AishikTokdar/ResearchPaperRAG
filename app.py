@@ -90,7 +90,7 @@ with st.sidebar:
     
     provider = st.selectbox(
         "LLM Provider",
-        options=["Groq", "Gemini", "Ollama (Local)", "OpenRouter"],
+        options=["Gemini", "Groq", "Ollama (Local)", "OpenRouter"],
         index=0,
         help="Select local Ollama for offline use or a free API tier."
     )

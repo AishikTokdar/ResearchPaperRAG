@@ -44,7 +44,7 @@ import { getChatEntryReactKey } from "@/lib/chat-history";
 import { ConfirmAlertDialog } from "@/components/ui/confirm-alert-dialog";
 import { SESSION_INDEX_RETENTION_DAYS } from "@/lib/session-retention";
 
-const DEFAULT_CHAT_MODEL_ID = "openai/gpt-oss-120b";
+const DEFAULT_CHAT_MODEL_ID = "gemini-3.6-flash";
 
 function exportAsTXT(chatHistory: ChatEntry[], activeSessionName?: string) {
   if (chatHistory.length === 0) return;
@@ -435,8 +435,11 @@ export function ChatContainer() {
                 <ModelSelector
                   value={selectedModel}
                   onChange={(m: AIModel) => {
-                    setSelectedModel(m.id);
-                    setModelMeta({ name: m.name, provider: m.provider });
+                    if (m.id !== selectedModel) {
+                      setSelectedModel(m.id);
+                      setModelMeta({ name: m.name, provider: m.provider });
+                      clearHistory();
+                    }
                   }}
                 />
               </div>

@@ -29,6 +29,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
 from langchain_community.llms import Ollama
 
+from ..config import AI_PROVIDERS, PROVIDER_PRIORITY, get_all_provider_api_keys
+
 
 class GapAnalyzerEngine:
     def __init__(self, embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
@@ -152,50 +154,80 @@ class GapAnalyzerEngine:
 
         return len(all_docs)
 
-    def _get_llm(self, provider: str = "groq", model_name: str = "openai/gpt-oss-120b", api_key: Optional[str] = None):
-        provider = provider.lower() if provider else "groq"
+    def _get_all_fallback_candidates(
+        self, provider: str, model_name: str
+    ) -> List[Tuple[str, str]]:
+        candidates: List[Tuple[str, str]] = []
+        seen = set()
+
+        def add(p: str, m: str):
+            if not p or not m:
+                return
+            key = (p.lower(), m.lower())
+            if key not in seen:
+                seen.add(key)
+                candidates.append((p, m))
+
+        if provider and model_name:
+            add(provider, model_name)
+            p_clean = provider.lower()
+            if p_clean in AI_PROVIDERS:
+                for m in AI_PROVIDERS[p_clean].models:
+                    add(provider, m)
+
+        for prov_name in PROVIDER_PRIORITY:
+            prov = AI_PROVIDERS.get(prov_name)
+            if prov:
+                for m in prov.models:
+                    add(prov.name, m)
+
+        for prov_name, prov in AI_PROVIDERS.items():
+            for m in prov.models:
+                add(prov.name, m)
+
+        return candidates
+
+    def _get_llm_with_key(
+        self, provider: str = "gemini", model_name: str = "gemini-3.6-flash", api_key: Optional[str] = None
+    ) -> ChatOpenAI:
+        provider = provider.lower() if provider else "gemini"
         
         if provider == "groq":
-            key = api_key or os.getenv("GROQ_API_KEY")
             return ChatOpenAI(
                 base_url="https://api.groq.com/openai/v1",
-                api_key=key or "placeholder",
+                api_key=api_key or "placeholder",
                 model=model_name or "llama-3.3-70b-versatile",
                 temperature=0.2,
                 max_tokens=8192,
             )
         elif provider == "openrouter":
-            key = api_key or os.getenv("OPENROUTER_API_KEY")
             return ChatOpenAI(
                 base_url=os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1"),
-                api_key=key or "placeholder",
+                api_key=api_key or "placeholder",
                 model=model_name or "meta-llama/llama-3.3-70b-instruct:free",
                 temperature=0.2,
                 max_tokens=8192,
             )
         elif provider == "cerebras":
-            key = api_key or os.getenv("CEREBRAS_API_KEY")
             return ChatOpenAI(
                 base_url="https://api.cerebras.ai/v1",
-                api_key=key or "placeholder",
+                api_key=api_key or "placeholder",
                 model=model_name or "llama3.3-70b",
                 temperature=0.2,
                 max_tokens=8192,
             )
         elif provider == "sambanova":
-            key = api_key or os.getenv("SAMBANOVA_API_KEY")
             return ChatOpenAI(
                 base_url="https://api.sambanova.ai/v1",
-                api_key=key or "placeholder",
+                api_key=api_key or "placeholder",
                 model=model_name or "Meta-Llama-3.3-70B-Instruct",
                 temperature=0.2,
                 max_tokens=8192,
             )
         elif provider == "huggingface":
-            key = api_key or os.getenv("HF_API_KEY")
             return ChatOpenAI(
                 base_url="https://router.huggingface.co/v1",
-                api_key=key or "placeholder",
+                api_key=api_key or "placeholder",
                 model=model_name or "meta-llama/Meta-Llama-3-8B-Instruct",
                 temperature=0.2,
                 max_tokens=8192,
@@ -219,6 +251,21 @@ class GapAnalyzerEngine:
                 max_tokens=8192,
             )
 
+    def _get_llms_to_try(
+        self, provider: str = "gemini", model_name: str = "gemini-3.6-flash", api_key: Optional[str] = None
+    ) -> List[ChatOpenAI]:
+        provider = provider.lower() if provider else "gemini"
+        keys = get_all_provider_api_keys(provider, api_key)
+        if keys:
+            return [
+                self._get_llm_with_key(provider=provider, model_name=model_name, api_key=k)
+                for k in keys
+            ]
+        return [self._get_llm_with_key(provider=provider, model_name=model_name, api_key=api_key)]
+
+    def _get_llm(self, provider: str = "gemini", model_name: str = "gemini-3.6-flash", api_key: Optional[str] = None):
+        return self._get_llm_with_key(provider=provider, model_name=model_name, api_key=api_key)
+
     def _try_single_generation(
         self,
         topic: str,
@@ -226,10 +273,13 @@ class GapAnalyzerEngine:
         model_name: str,
         api_key: Optional[str]
     ) -> Optional[str]:
-        try:
-            llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
-            retriever = self.vector_store.as_retriever(search_kwargs={"k": 4})
-            retrieved_docs = retriever.invoke(f"Research gaps trends methods limitations contradictions for {topic}")
+        llms = self._get_llms_to_try(provider=provider, model_name=model_name, api_key=api_key)
+        last_err = None
+
+        for llm in llms:
+            try:
+                retriever = self.vector_store.as_retriever(search_kwargs={"k": 4})
+                retrieved_docs = retriever.invoke(f"Research gaps trends methods limitations contradictions for {topic}")
 
             formatted_context_items = []
             for d in retrieved_docs:
@@ -308,24 +358,26 @@ RETRIEVED MULTI-PAPER CONTEXT:
         model_name: str = "openai/gpt-oss-120b",
         api_key: Optional[str] = None
     ) -> str:
-        try:
-            llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
+        llms = self._get_llms_to_try(provider=provider, model_name=model_name, api_key=api_key)
+        last_err = None
 
-            retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
-            retrieved_docs = retriever.invoke(f"Research literature trends methods limitations contradictions {topic}")
+        for llm in llms:
+            try:
+                retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
+                retrieved_docs = retriever.invoke(f"Research literature trends methods limitations contradictions {topic}")
 
-            formatted_context_items = []
-            for d in retrieved_docs:
-                paper_title = d.metadata.get("paper_title", "Unknown")
-                section = d.metadata.get("section", "Section N/A")
-                year = d.metadata.get("year", "")
-                url = d.metadata.get("source", "") or d.metadata.get("url", "")
-                formatted_context_items.append(
-                    f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()[:400]}"
-                )
-            compact_context = "\n\n".join(formatted_context_items)
+                formatted_context_items = []
+                for d in retrieved_docs:
+                    paper_title = d.metadata.get("paper_title", "Unknown")
+                    section = d.metadata.get("section", "Section N/A")
+                    year = d.metadata.get("year", "")
+                    url = d.metadata.get("source", "") or d.metadata.get("url", "")
+                    formatted_context_items.append(
+                        f"[Paper: {paper_title} ({year}) | URL: {url} | Section: {section}]\n{d.page_content.strip()[:400]}"
+                    )
+                compact_context = "\n\n".join(formatted_context_items)
 
-            batch_1_prompt = """You are an academic research assistant.
+                batch_1_prompt = """You are an academic research assistant.
 Analyze the provided paper context for topic: "{topic}".
 Generate Part 1 of the research report covering strictly these 4 sections:
 
@@ -349,7 +401,7 @@ CONTEXT:
 {context}
 """
 
-            batch_2_prompt = """You are an academic research assistant.
+                batch_2_prompt = """You are an academic research assistant.
 Analyze the provided paper context for topic: "{topic}".
 Generate Part 2 of the research report covering strictly these 4 sections:
 
@@ -373,74 +425,63 @@ CONTEXT:
 {context}
 """
 
-            p1_chain = ChatPromptTemplate.from_template(batch_1_prompt) | llm | StrOutputParser()
-            p2_chain = ChatPromptTemplate.from_template(batch_2_prompt) | llm | StrOutputParser()
+                p1_chain = ChatPromptTemplate.from_template(batch_1_prompt) | llm | StrOutputParser()
+                p2_chain = ChatPromptTemplate.from_template(batch_2_prompt) | llm | StrOutputParser()
 
-            part1 = p1_chain.invoke({"topic": topic, "context": compact_context})
-            part2 = p2_chain.invoke({"topic": topic, "context": compact_context})
+                part1 = p1_chain.invoke({"topic": topic, "context": compact_context})
+                part2 = p2_chain.invoke({"topic": topic, "context": compact_context})
 
-            notice = "> [NOTICE] Large context detected. Prompt was automatically split into 2 focused generation batches (Sections 1-4 and Sections 5-8) to bypass API token limit constraints.\n\n"
-            full_report = f"# Research Analysis & Gap Report: {topic}\n\n{notice}{part1.strip()}\n\n{part2.strip()}"
+                notice = "> [NOTICE] Large context detected. Prompt was automatically split into 2 focused generation batches (Sections 1-4 and Sections 5-8) to bypass API token limit constraints.\n\n"
+                full_report = f"# Research Analysis & Gap Report: {topic}\n\n{notice}{part1.strip()}\n\n{part2.strip()}"
 
-            for p in self.paper_metadata_list:
-                title = p.get("title", "").strip()
-                url = p.get("url") or p.get("pdf_url") or ""
-                if title and url and len(title) > 4:
-                    escaped_title = re.escape(title)
-                    pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
-                    full_report = re.sub(pattern_bracket, rf'[\1]({url})', full_report)
+                for p in self.paper_metadata_list:
+                    title = p.get("title", "").strip()
+                    url = p.get("url") or p.get("pdf_url") or ""
+                    if title and url and len(title) > 4:
+                        escaped_title = re.escape(title)
+                        pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
+                        full_report = re.sub(pattern_bracket, rf'[\1]({url})', full_report)
 
-            return full_report
-        except Exception as err:
-            return f"Error: {str(err)}"
+                return full_report
+            except Exception as err:
+                last_err = err
+                continue
+
+        return f"Error: {str(last_err)}"
 
     def generate_gap_report(
         self,
         topic: str,
-        provider: str = "groq",
-        model_name: str = "openai/gpt-oss-120b",
+        provider: str = "gemini",
+        model_name: str = "gemini-3.6-flash",
         api_key: Optional[str] = None
     ) -> str:
         if not self.vector_store:
             return "Error: No papers indexed in vector store. Please fetch or upload papers first."
 
-        fallback_candidates = [
-            (provider, model_name),
-            ("groq", "llama-3.3-70b-versatile"),
-            ("groq", "llama3-8b-8192"),
-            ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
-            ("openrouter", "google/gemma-2-9b-it:free"),
-            ("cerebras", "llama3.3-70b"),
-            ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
-            ("gemini", "gemini-3.6-flash"),
-        ]
-
-        seen = set()
-        unique_candidates = []
-        for p_cand, m_cand in fallback_candidates:
-            key = (p_cand.lower(), m_cand.lower())
-            if key not in seen:
-                seen.add(key)
-                unique_candidates.append((p_cand, m_cand))
+        unique_candidates = self._get_all_fallback_candidates(provider, model_name)
 
         for idx, (p_curr, m_curr) in enumerate(unique_candidates):
             res = self._try_single_generation(topic, p_curr, m_curr, api_key)
-            if res and not res.startswith("ERROR:"):
+            if res and not res.strip().lower().startswith("error:"):
                 if idx > 0:
                     notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`**, which successfully synthesized your 8-layer research report.\n\n"
                     res = notice + res
                 return res
 
             res_split = self._generate_split_gap_report(topic, p_curr, m_curr, api_key)
-            if res_split and not res_split.startswith("Error"):
+            if res_split and not res_split.strip().lower().startswith("error:"):
                 if idx > 0:
                     notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`** (with prompt splitting), which successfully synthesized your 8-layer research report.\n\n"
                     res_split = notice + res_split
                 return res_split
 
         return (
-            f"> [ALL MODELS EXHAUSTED] All AI model providers (Groq, OpenRouter, Cerebras, SambaNova, Gemini) were unable to process the request due to API rate limits or quota constraints.\n\n"
-            f"**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again."
+            "> [SERVICE TEMPORARILY BUSY] The system could not complete the report synthesis across available AI model providers due to temporary rate limits or network congestion.\n\n"
+            "**Recommended Actions**:\n"
+            "- Please wait a few seconds and try again.\n"
+            "- Check your API keys in `backend/.env` (e.g. `GOOGLE_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`).\n"
+            "- If multiple research papers are selected, try selecting 1-3 papers to reduce context size."
         )
 
     def _try_single_followup(
@@ -450,11 +491,14 @@ CONTEXT:
         model_name: str,
         api_key: Optional[str]
     ) -> Optional[str]:
-        try:
-            llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
-            retriever = self.vector_store.as_retriever(search_kwargs={"k": 5})
+        llms = self._get_llms_to_try(provider=provider, model_name=model_name, api_key=api_key)
+        last_err = None
 
-            prompt_template = """You are a research assistant answering follow-up questions about the analyzed research papers.
+        for llm in llms:
+            try:
+                retriever = self.vector_store.as_retriever(search_kwargs={"k": 5})
+
+                prompt_template = """You are a research assistant answering follow-up questions about the analyzed research papers.
 Answer the user's question using ONLY the provided multi-paper context. Always cite the paper title for your statements.
 If a paper has a URL, format the paper title citation as a hyperlinked Markdown link: `[Paper Title](URL)`. Do NOT include internal chunk identifiers (e.g. Chunk 19) or wrap citations in outer double brackets.
 
@@ -465,84 +509,72 @@ Question: {question}
 
 Answer (with exact source citations and paper hyperlinks):"""
 
-            prompt = ChatPromptTemplate.from_template(prompt_template)
+                prompt = ChatPromptTemplate.from_template(prompt_template)
 
-            def format_docs(docs):
-                formatted = []
-                for d in docs:
-                    p_title = d.metadata.get('paper_title', 'Paper')
-                    p_sec = d.metadata.get('section', 'Section')
-                    p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
-                    formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content[:500]}")
-                return "\n\n".join(formatted)
+                def format_docs(docs):
+                    formatted = []
+                    for d in docs:
+                        p_title = d.metadata.get('paper_title', 'Paper')
+                        p_sec = d.metadata.get('section', 'Section')
+                        p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
+                        formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content[:500]}")
+                    return "\n\n".join(formatted)
 
-            rag_chain = (
-                {"context": retriever | format_docs, "question": RunnablePassthrough()}
-                | prompt
-                | llm
-                | StrOutputParser()
-            )
+                rag_chain = (
+                    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+                    | prompt
+                    | llm
+                    | StrOutputParser()
+                )
 
-            answer = rag_chain.invoke(question)
+                answer = rag_chain.invoke(question)
 
-            for p in self.paper_metadata_list:
-                title = p.get("title", "").strip()
-                url = p.get("url") or p.get("pdf_url") or ""
-                if title and url and len(title) > 4:
-                    escaped_title = re.escape(title)
-                    pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
-                    answer = re.sub(pattern_bracket, rf'[\1]({url})', answer)
+                for p in self.paper_metadata_list:
+                    title = p.get("title", "").strip()
+                    url = p.get("url") or p.get("pdf_url") or ""
+                    if title and url and len(title) > 4:
+                        escaped_title = re.escape(title)
+                        pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
+                        answer = re.sub(pattern_bracket, rf'[\1]({url})', answer)
 
-            # Strip internal chunk identifiers like | Chunk 19, (Chunk 19), [Chunk 19]
-            answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]', r'[\1](\2)', answer, flags=re.IGNORECASE)
-            answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]', r'[\1](\2)', answer)
-            answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\]', r'[\1](\2)', answer)
-            answer = re.sub(r'\s*\|\s*Chunk\s*\d+', '', answer, flags=re.IGNORECASE)
-            answer = re.sub(r'\s*\(\s*Chunk\s*\d+\s*\)', '', answer, flags=re.IGNORECASE)
-            answer = re.sub(r'\[\s*Chunk\s*\d+\s*\]', '', answer, flags=re.IGNORECASE)
+                # Strip internal chunk identifiers like | Chunk 19, (Chunk 19), [Chunk 19]
+                answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]', r'[\1](\2)', answer, flags=re.IGNORECASE)
+                answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]', r'[\1](\2)', answer)
+                answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\]', r'[\1](\2)', answer)
+                answer = re.sub(r'\s*\|\s*Chunk\s*\d+', '', answer, flags=re.IGNORECASE)
+                answer = re.sub(r'\s*\(\s*Chunk\s*\d+\s*\)', '', answer, flags=re.IGNORECASE)
+                answer = re.sub(r'\[\s*Chunk\s*\d+\s*\]', '', answer, flags=re.IGNORECASE)
 
-            return answer
-        except Exception as e:
-            return f"ERROR: {str(e)}"
+                return answer
+            except Exception as e:
+                last_err = e
+                continue
+
+        return f"ERROR: {str(last_err)}"
 
     def ask_followup(
         self,
         question: str,
-        provider: str = "groq",
-        model_name: str = "openai/gpt-oss-120b",
+        provider: str = "gemini",
+        model_name: str = "gemini-3.6-flash",
         api_key: Optional[str] = None
     ) -> str:
         if not self.vector_store:
             return "No documents available. Please load papers first."
 
-        fallback_candidates = [
-            (provider, model_name),
-            ("groq", "llama-3.3-70b-versatile"),
-            ("groq", "llama3-8b-8192"),
-            ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
-            ("openrouter", "google/gemma-2-9b-it:free"),
-            ("cerebras", "llama3.3-70b"),
-            ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
-            ("gemini", "gemini-3.6-flash"),
-        ]
-
-        seen = set()
-        unique_candidates = []
-        for p_cand, m_cand in fallback_candidates:
-            key = (p_cand.lower(), m_cand.lower())
-            if key not in seen:
-                seen.add(key)
-                unique_candidates.append((p_cand, m_cand))
+        unique_candidates = self._get_all_fallback_candidates(provider, model_name)
 
         for idx, (p_curr, m_curr) in enumerate(unique_candidates):
             res = self._try_single_followup(question, p_curr, m_curr, api_key)
-            if res and not res.startswith("ERROR:"):
+            if res and not res.strip().lower().startswith("error:"):
                 if idx > 0:
                     notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`**, which successfully answered your follow-up query.\n\n"
                     res = notice + res
                 return res
 
         return (
-            f"> [ALL MODELS EXHAUSTED] All AI model providers (Groq, OpenRouter, Cerebras, SambaNova, Gemini) were unable to process the request due to API rate limits or quota constraints.\n\n"
-            f"**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console."
+            "> [SERVICE TEMPORARILY BUSY] The system could not answer your follow-up question across available AI model providers due to temporary rate limits or high network traffic.\n\n"
+            "**Recommended Actions**:\n"
+            "- Please wait a few seconds and try asking again.\n"
+            "- Verify your API keys in `backend/.env` (e.g. `GOOGLE_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`)."
         )

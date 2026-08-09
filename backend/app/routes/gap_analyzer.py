@@ -22,15 +22,15 @@ class IngestPapersRequest(BaseModel):
 
 class AnalyzeGapsRequest(BaseModel):
     topic: str
-    provider: Optional[str] = "groq"
-    model_name: Optional[str] = "openai/gpt-oss-120b"
+    provider: Optional[str] = "gemini"
+    model_name: Optional[str] = "gemini-3.6-flash"
     api_key: Optional[str] = None
 
 
 class ChatFollowupRequest(BaseModel):
     question: str
-    provider: Optional[str] = "groq"
-    model_name: Optional[str] = "openai/gpt-oss-120b"
+    provider: Optional[str] = "gemini"
+    model_name: Optional[str] = "gemini-3.6-flash"
     api_key: Optional[str] = None
 
 
@@ -73,13 +73,17 @@ async def analyze_research_gaps(req: AnalyzeGapsRequest):
     try:
         report = analyzer_engine.generate_gap_report(
             topic=req.topic,
-            provider=req.provider or "groq",
-            model_name=req.model_name or "openai/gpt-oss-120b",
+            provider=req.provider or "gemini",
+            model_name=req.model_name or "gemini-3.6-flash",
             api_key=req.api_key,
         )
         return {"topic": req.topic, "report": report}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gap analysis error: {str(e)}")
+        fallback_msg = (
+            "> [SERVICE TEMPORARILY BUSY] The system encountered a temporary error while synthesizing the report. "
+            "Please try again in a few moments or verify your backend API key settings."
+        )
+        return {"topic": req.topic, "report": fallback_msg}
 
 
 @router.post("/api/chat/followup")
@@ -89,10 +93,14 @@ async def chat_followup(req: ChatFollowupRequest):
     try:
         answer = analyzer_engine.ask_followup(
             question=req.question,
-            provider=req.provider or "groq",
-            model_name=req.model_name or "openai/gpt-oss-120b",
+            provider=req.provider or "gemini",
+            model_name=req.model_name or "gemini-3.6-flash",
             api_key=req.api_key,
         )
         return {"question": req.question, "answer": answer}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Followup chat error: {str(e)}")
+        fallback_msg = (
+            "> [SERVICE TEMPORARILY BUSY] The system encountered a temporary error processing your question. "
+            "Please try asking your question again in a few moments."
+        )
+        return {"question": req.question, "answer": fallback_msg}
