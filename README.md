@@ -15,8 +15,6 @@ ResearchPaperRAG is an open-source Retrieval-Augmented Generation (RAG) platform
 The platform incorporates an interactive Research Gap Analyzer SPA powered by a high-performance FastAPI / Gunicorn backend with multi-provider failover across 27+ AI models.
 
 - GitHub Repository: https://github.com/AishikTokdar/ResearchPaperRAG
-- Live Local App Access: http://127.0.0.1:5173/chat
-- Interactive OpenAPI / Swagger Documentation: http://127.0.0.1:8000/docs
 
 ---
 

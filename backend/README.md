@@ -1,6 +1,6 @@
 ---
 title: ResearchPaperRAG Backend
-emoji: rocket
+emoji: 🚀
 colorFrom: purple
 colorTo: indigo
 sdk: gradio
