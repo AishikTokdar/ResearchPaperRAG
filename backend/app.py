@@ -1,10 +1,22 @@
+import sys
 import os
+
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 os.environ["GRADIO_SSR_MODE"] = "False"
 
 import spaces
 import gradio as gr
-from app.main import app as fastapi_app
+try:
+    from app.main import app as fastapi_app
+except ModuleNotFoundError:
+    from backend.app.main import app as fastapi_app
 
 @spaces.GPU
 def zerogpu_probe(value: str) -> str:

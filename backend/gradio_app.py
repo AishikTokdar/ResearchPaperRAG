@@ -46,6 +46,17 @@ if _orig_js_to_py:
     _client_utils._json_schema_to_python_type = _safe_json_schema_to_python_type
 
 
+import sys
+import os
+
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -53,20 +64,36 @@ os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-from app.config import (
-    get_settings,
-    AI_PROVIDERS,
-    PROVIDER_PRIORITY,
-    get_available_providers,
-    get_embedding_fallback_chain,
-    provider_has_credentials,
-)
-from app.services.pdf_processor import PDFProcessor
-from app.services.session_vector_registry import SessionVectorRegistry
-from app.services.llm_service import LLMService
-from app.services.usage_counters import increment_pdf_uploads, increment_chat_completions, read_counters
-from app.agents.pipeline import AgentPipeline
-from app.agents.base_agent import AgentResult
+try:
+    from app.config import (
+        get_settings,
+        AI_PROVIDERS,
+        PROVIDER_PRIORITY,
+        get_available_providers,
+        get_embedding_fallback_chain,
+        provider_has_credentials,
+    )
+    from app.services.pdf_processor import PDFProcessor
+    from app.services.session_vector_registry import SessionVectorRegistry
+    from app.services.llm_service import LLMService
+    from app.services.usage_counters import increment_pdf_uploads, increment_chat_completions, read_counters
+    from app.agents.pipeline import AgentPipeline
+    from app.agents.base_agent import AgentResult
+except ModuleNotFoundError:
+    from backend.app.config import (
+        get_settings,
+        AI_PROVIDERS,
+        PROVIDER_PRIORITY,
+        get_available_providers,
+        get_embedding_fallback_chain,
+        provider_has_credentials,
+    )
+    from backend.app.services.pdf_processor import PDFProcessor
+    from backend.app.services.session_vector_registry import SessionVectorRegistry
+    from backend.app.services.llm_service import LLMService
+    from backend.app.services.usage_counters import increment_pdf_uploads, increment_chat_completions, read_counters
+    from backend.app.agents.pipeline import AgentPipeline
+    from backend.app.agents.base_agent import AgentResult
 
 logger = logging.getLogger(__name__)
 

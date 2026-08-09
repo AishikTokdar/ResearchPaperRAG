@@ -5,9 +5,25 @@ from collections.abc import AsyncGenerator
 from typing import Any, cast
 from unittest.mock import patch
 
-from app.routes.chat import _stream_pipeline
-from app.services.llm_service import LLMService
-from app.services.vector_store import VectorStoreService
+import sys
+import os
+
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+try:
+    from app.routes.chat import _stream_pipeline
+    from app.services.llm_service import LLMService
+    from app.services.vector_store import VectorStoreService
+except ModuleNotFoundError:
+    from backend.app.routes.chat import _stream_pipeline
+    from backend.app.services.llm_service import LLMService
+    from backend.app.services.vector_store import VectorStoreService
 
 
 class _FakePipeline:

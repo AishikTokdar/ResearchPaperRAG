@@ -6,12 +6,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: researchpaperrag-backend
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
       - PORT=8000
       - HOST=0.0.0.0
-      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost
+      - CORS_ORIGINS=*
     env_file:
       - ./backend/.env
     volumes:
@@ -27,12 +28,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_BASE_URL=http://localhost:8000
+        - VITE_API_BASE_URL=
     container_name: researchpaperrag-frontend
+    restart: unless-stopped
     ports:
+      - "80:80"
       - "5173:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   faiss_data:

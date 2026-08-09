@@ -1,12 +1,23 @@
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
+
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 import streamlit as st
 import pandas as pd
-from backend.app.services.paper_fetcher import PaperFetcher
-from backend.app.services.gap_analyzer_engine import GapAnalyzerEngine
+
+try:
+    from backend.app.services.paper_fetcher import PaperFetcher
+    from backend.app.services.gap_analyzer_engine import GapAnalyzerEngine
+except ModuleNotFoundError:
+    from app.services.paper_fetcher import PaperFetcher
+    from app.services.gap_analyzer_engine import GapAnalyzerEngine
 
 st.set_page_config(
     page_title="Research Gap Analyzer | RAG Assistant",

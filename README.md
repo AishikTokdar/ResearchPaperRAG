@@ -50,14 +50,14 @@ ResearchPaperRAG conducts concurrent, real-time searches across 6 open-access li
 ### 2. Strict 3-Year Publication Window (2024–2026)
 Research results are automatically validated against publication dates and filtered strictly to the current date's 3-year publication window (2024, 2025, 2026). This filters out outdated methodologies and forces the gap analysis engine to focus exclusively on contemporary state-of-the-art research.
 
-### 3. Max 5-Paper Focused RAG Knowledge Base
-Users can select up to 5 research papers (or attach custom PDF files up to 50 MB cumulative size) per gap analysis run, expanding multi-document synthesis while maintaining high-precision context retrieval.
+### 3. Max 5-Paper Focused RAG Knowledge Base with Balanced Multi-Paper Retrieval
+Users can select up to 5 research papers (or attach custom PDF files up to 50 MB cumulative size) per gap analysis run. A custom `_get_balanced_documents` retriever guarantees that chunks from **every selected paper** are represented in the RAG context, eliminating single-paper bias during multi-paper comparison questions.
 
 ### 4. Direct New-Tab Paper Access
 Every fetched paper in the interactive search list includes direct external links (url / pdf_url / doi). Clicking any paper card immediately opens the original publisher document or PDF in a new browser tab.
 
-### 5. Grounded Interactive Chat with Citation Badges
-Following the 8-layer report synthesis, users can conduct follow-up Q&A strictly grounded in the ingested paper texts. Inline citations ([Paper Title, 2026, Section 3.2]) clean out raw Markdown formatting symbols and render as compact, styled inline pills.
+### 5. Grounded Interactive Chat with Citation Badges & Session Reset
+Following the 8-layer report synthesis, users can conduct follow-up Q&A strictly grounded in the ingested paper texts. Inline citations clean out raw Markdown formatting symbols and render as styled inline pills. Re-running gap analysis on new papers automatically resets the follow-up chat session, and a manual "Clear Chat" button allows instant thread clearing.
 
 ### 6. Multi-Format Exporters (.pdf, .md, .txt)
 - Print PDF Export (.pdf): Generates a clean print-styled document with custom CSS table styling and triggers native browser printing.
@@ -344,23 +344,42 @@ gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 
 ## Docker & Containerization Guide
 
-### Option A: Full-Stack Docker Compose (Recommended)
-Launch both React frontend and FastAPI backend in isolated containers with a single command:
+### Option A: Full-Stack Remote VPS & Cloud Deployment (Docker Compose)
+Deploy both the React SPA frontend (bundled with Nginx API reverse proxy) and the FastAPI backend to any remote VPS server (AWS EC2, DigitalOcean, Hetzner, Coolify, Linode, etc.) with automated healthchecks:
 
 ```bash
-# 1. Ensure backend/.env exists with your API keys
+# 1. Clone repository on your remote VPS / server
+git clone https://github.com/AishikTokdar/ResearchPaperRAG.git
+cd ResearchPaperRAG
+
+# 2. Ensure backend/.env exists with your API key configuration
 cp backend/.env.example backend/.env
 
-# 2. Build and launch containers
-docker compose up --build
+# 3. Build and launch production containers in detached background mode
+docker compose up -d --build
 ```
 
-Access Points:
-- React Frontend: http://localhost:5173
-- FastAPI Backend: http://localhost:8000
-- Interactive OpenAPI Sandbox: http://localhost:8000/docs
+#### Access Points:
+- Web SPA Frontend (Ports 80 & 5173): `http://your-vps-ip/` or `http://your-domain.com/`
+- FastAPI Backend API (Port 8000): `http://your-vps-ip:8000/docs`
 
-### Option B: Standalone Backend Docker Container
+#### How Remote VPS Nginx Reverse Proxying Works:
+The `frontend` container includes an optimized Nginx configuration that automatically proxies `/api/`, `/health`, `/upload`, `/ask`, `/models`, and `/docs` to `http://backend:8000`. Deploying to any public IP address or custom domain works out-of-the-box with **0 CORS issues** or **SSL/HTTP mixed content errors**.
+
+### Option B: Universal Root Docker Container (Hugging Face Docker SDK & VPS)
+```bash
+# Build unified root image
+docker build -t researchpaperrag .
+
+# Run container on port 7860
+docker run -d \
+  -p 7860:7860 \
+  --env-file backend/.env \
+  --name researchpaperrag \
+  researchpaperrag
+```
+
+### Option C: Standalone Backend Docker Container
 ```bash
 cd backend
 
