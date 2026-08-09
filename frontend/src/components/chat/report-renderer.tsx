@@ -325,7 +325,7 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
   );
 }
 
-function FormattedBlock({ text }: { text: string }) {
+export function FormattedBlock({ text }: { text: string }) {
   if (!text) return null;
 
   const lines = text.split("\n");
@@ -426,6 +426,33 @@ function FormattedBlock({ text }: { text: string }) {
               if (!cleanP) return null;
               if (cleanP.match(/^(---|---| -{3,}|\|\-\-+|\*\*\*)$/)) return null;
 
+              const isFallbackAlert = cleanP.includes("[FALLBACK ALERT]");
+              const isExhaustedAlert = cleanP.includes("[ALL MODELS EXHAUSTED]");
+              const isCallout = cleanP.startsWith(">") || isFallbackAlert || isExhaustedAlert;
+
+              if (isCallout) {
+                const alertText = cleanP
+                  .replace(/^>\s*/gm, "")
+                  .replace(/\[(FALLBACK ALERT|ALL MODELS EXHAUSTED|NOTICE)\]/g, "")
+                  .trim();
+
+                return (
+                  <div
+                    key={pIdx}
+                    className={`my-2 p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 border ${
+                      isExhaustedAlert
+                        ? "bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200"
+                        : "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
+                    }`}
+                  >
+                    <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`} />
+                    <div className="flex-1 leading-relaxed">
+                      <RichInlineText text={alertText.replace(/\n/g, " ")} />
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <p key={pIdx} className="leading-relaxed">
                   <RichInlineText text={cleanP.replace(/\n/g, " ")} />
@@ -488,7 +515,14 @@ function TableRenderer({ tableMarkdown }: { tableMarkdown: string }) {
 function RichInlineText({ text }: { text: string }) {
   if (!text) return null;
 
-  const cleaned = text.replace(/^#+\s*/, "");
+  let cleaned = text.replace(/^#+\s*/, "");
+  // Sanitize double bracket links and strip internal chunk numbers (e.g. Chunk 19)
+  cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]/gi, "[$1]($2)");
+  cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]/g, "[$1]($2)");
+  cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\]/g, "[$1]($2)");
+  cleaned = cleaned.replace(/\s*\|\s*Chunk\s*\d+/gi, "");
+  cleaned = cleaned.replace(/\s*\(\s*Chunk\s*\d+\s*\)/gi, "");
+  cleaned = cleaned.replace(/\[\s*Chunk\s*\d+\s*\]/gi, "");
 
   const TOKEN_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\])/g;
 

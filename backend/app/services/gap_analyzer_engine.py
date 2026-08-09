@@ -85,7 +85,7 @@ class GapAnalyzerEngine:
             )
             chunks = text_splitter.split_documents([raw_doc])
             for i, chunk in enumerate(chunks):
-                chunk.metadata["section"] = f"Chunk {i+1}"
+                chunk.metadata["section"] = "Main Text"
             all_docs.extend(chunks)
 
         if uploaded_pdf_files and len(capped_fetched) < 5:
@@ -443,22 +443,20 @@ CONTEXT:
             f"**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again."
         )
 
-    def ask_followup(
+    def _try_single_followup(
         self,
         question: str,
-        provider: str = "groq",
-        model_name: str = "openai/gpt-oss-120b",
-        api_key: Optional[str] = None
-    ) -> str:
-        if not self.vector_store:
-            return "No documents available. Please load papers first."
+        provider: str,
+        model_name: str,
+        api_key: Optional[str]
+    ) -> Optional[str]:
+        try:
+            llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
+            retriever = self.vector_store.as_retriever(search_kwargs={"k": 5})
 
-        llm = self._get_llm(provider=provider, model_name=model_name, api_key=api_key)
-        retriever = self.vector_store.as_retriever(search_kwargs={"k": 5})
-
-        prompt_template = """You are a research assistant answering follow-up questions about the analyzed research papers.
-Answer the user's question using ONLY the provided multi-paper context. Always cite the paper title and section for your statements.
-If a paper has a URL, format the paper title citation as a hyperlinked Markdown link: `[Paper Title](URL)`.
+            prompt_template = """You are a research assistant answering follow-up questions about the analyzed research papers.
+Answer the user's question using ONLY the provided multi-paper context. Always cite the paper title for your statements.
+If a paper has a URL, format the paper title citation as a hyperlinked Markdown link: `[Paper Title](URL)`. Do NOT include internal chunk identifiers (e.g. Chunk 19) or wrap citations in outer double brackets.
 
 Context:
 {context}
@@ -467,25 +465,24 @@ Question: {question}
 
 Answer (with exact source citations and paper hyperlinks):"""
 
-        prompt = ChatPromptTemplate.from_template(prompt_template)
+            prompt = ChatPromptTemplate.from_template(prompt_template)
 
-        def format_docs(docs):
-            formatted = []
-            for d in docs:
-                p_title = d.metadata.get('paper_title', 'Paper')
-                p_sec = d.metadata.get('section', 'Section')
-                p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
-                formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content[:500]}")
-            return "\n\n".join(formatted)
+            def format_docs(docs):
+                formatted = []
+                for d in docs:
+                    p_title = d.metadata.get('paper_title', 'Paper')
+                    p_sec = d.metadata.get('section', 'Section')
+                    p_url = d.metadata.get('source', '') or d.metadata.get('url', '')
+                    formatted.append(f"[Paper: {p_title} | URL: {p_url} | Section: {p_sec}]\n{d.page_content[:500]}")
+                return "\n\n".join(formatted)
 
-        rag_chain = (
-            {"context": retriever | format_docs, "question": RunnablePassthrough()}
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
+            rag_chain = (
+                {"context": retriever | format_docs, "question": RunnablePassthrough()}
+                | prompt
+                | llm
+                | StrOutputParser()
+            )
 
-        try:
             answer = rag_chain.invoke(question)
 
             for p in self.paper_metadata_list:
@@ -496,6 +493,56 @@ Answer (with exact source citations and paper hyperlinks):"""
                     pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
                     answer = re.sub(pattern_bracket, rf'[\1]({url})', answer)
 
+            # Strip internal chunk identifiers like | Chunk 19, (Chunk 19), [Chunk 19]
+            answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]', r'[\1](\2)', answer, flags=re.IGNORECASE)
+            answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]', r'[\1](\2)', answer)
+            answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\]', r'[\1](\2)', answer)
+            answer = re.sub(r'\s*\|\s*Chunk\s*\d+', '', answer, flags=re.IGNORECASE)
+            answer = re.sub(r'\s*\(\s*Chunk\s*\d+\s*\)', '', answer, flags=re.IGNORECASE)
+            answer = re.sub(r'\[\s*Chunk\s*\d+\s*\]', '', answer, flags=re.IGNORECASE)
+
             return answer
         except Exception as e:
-            return f"Error answering question: {str(e)}"
+            return f"ERROR: {str(e)}"
+
+    def ask_followup(
+        self,
+        question: str,
+        provider: str = "groq",
+        model_name: str = "openai/gpt-oss-120b",
+        api_key: Optional[str] = None
+    ) -> str:
+        if not self.vector_store:
+            return "No documents available. Please load papers first."
+
+        fallback_candidates = [
+            (provider, model_name),
+            ("groq", "llama-3.3-70b-versatile"),
+            ("groq", "llama3-8b-8192"),
+            ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
+            ("openrouter", "google/gemma-2-9b-it:free"),
+            ("cerebras", "llama3.3-70b"),
+            ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
+            ("gemini", "gemini-3.6-flash"),
+        ]
+
+        seen = set()
+        unique_candidates = []
+        for p_cand, m_cand in fallback_candidates:
+            key = (p_cand.lower(), m_cand.lower())
+            if key not in seen:
+                seen.add(key)
+                unique_candidates.append((p_cand, m_cand))
+
+        for idx, (p_curr, m_curr) in enumerate(unique_candidates):
+            res = self._try_single_followup(question, p_curr, m_curr, api_key)
+            if res and not res.startswith("ERROR:"):
+                if idx > 0:
+                    notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`**, which successfully answered your follow-up query.\n\n"
+                    res = notice + res
+                return res
+
+        return (
+            f"> [ALL MODELS EXHAUSTED] All AI model providers (Groq, OpenRouter, Cerebras, SambaNova, Gemini) were unable to process the request due to API rate limits or quota constraints.\n\n"
+            f"**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console."
+        )

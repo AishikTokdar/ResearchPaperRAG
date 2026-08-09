@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { AI_MODELS, type AIModel, type FetchedPaper } from "@/types";
 import { toast } from "sonner";
-import { ReportRenderer } from "@/components/chat/report-renderer";
+import { ReportRenderer, FormattedBlock } from "@/components/chat/report-renderer";
 import { ModelSelector } from "@/components/chat/model-selector";
 
 interface ChatMessageItem {
@@ -675,7 +675,11 @@ export function ChatPage() {
                             : "bg-zinc-100 dark:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 rounded-bl-none border border-zinc-200 dark:border-zinc-700"
                         }`}
                       >
-                        {msg.text}
+                        {msg.sender === "user" ? (
+                          msg.text
+                        ) : (
+                          <FormattedBlock text={msg.text} />
+                        )}
                       </div>
                       {msg.sender === "user" && (
                         <div className="w-7 h-7 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center shrink-0">
