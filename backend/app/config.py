@@ -15,6 +15,8 @@ from pydantic_settings import BaseSettings
 
 # Pydantic reads .env into Settings, but AIProvider uses os.getenv — load .env into os.environ first.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
 
 _DEFAULT_CORS_ORIGINS: list[str] = [
     "http://localhost:5173",

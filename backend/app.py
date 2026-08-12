@@ -4,23 +4,37 @@ import os
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BACKEND_DIR)
 
-if BACKEND_DIR not in sys.path:
-    sys.path.insert(0, BACKEND_DIR)
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 os.environ["GRADIO_SSR_MODE"] = "False"
 
-import spaces
+try:
+    import spaces
+except ImportError:
+    class _SpacesFallback:
+        @staticmethod
+        def GPU(*args, **kwargs):
+            if args and callable(args[0]) and len(args) == 1 and not kwargs:
+                return args[0]
+            def decorator(func):
+                return func
+            return decorator
+    spaces = _SpacesFallback()
+
 import gradio as gr
+
 try:
     from app.main import app as fastapi_app
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError):
     from backend.app.main import app as fastapi_app
 
 @spaces.GPU
-def zerogpu_probe(value: str) -> str:
+def zerogpu_probe(value: str = "") -> str:
     return value or "ResearchPaperRAG backend is ready."
+
 
 demo = gr.Interface(
     fn=zerogpu_probe,

@@ -11,24 +11,53 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["PYTHONUNBUFFERED"] = "1"
 
+import sys
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(APP_DIR)
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import get_settings
-from .routes import (
-    chat_router,
-    gap_analyzer_router,
-    health_router,
-    runtime_summary_router,
-    tunnel_router,
-    upload_router,
-)
-from .routes.chat import set_llm_service
-from .routes.upload import set_services as set_upload_services
-from .services.faiss_session_cleanup import prune_stale_session_indexes, purge_all_session_indexes
-from .services.llm_service import LLMService
-from .services.pdf_processor import PDFProcessor
-from .services.session_vector_registry import SessionVectorRegistry
+try:
+    from .config import get_settings
+    from .routes import (
+        chat_router,
+        gap_analyzer_router,
+        health_router,
+        runtime_summary_router,
+        tunnel_router,
+        upload_router,
+    )
+    from .routes.chat import set_llm_service
+    from .routes.upload import set_services as set_upload_services
+    from .services.faiss_session_cleanup import prune_stale_session_indexes, purge_all_session_indexes
+    from .services.llm_service import LLMService
+    from .services.pdf_processor import PDFProcessor
+    from .services.session_vector_registry import SessionVectorRegistry
+except (ImportError, ValueError):
+    from app.config import get_settings
+    from app.routes import (
+        chat_router,
+        gap_analyzer_router,
+        health_router,
+        runtime_summary_router,
+        tunnel_router,
+        upload_router,
+    )
+    from app.routes.chat import set_llm_service
+    from app.routes.upload import set_services as set_upload_services
+    from app.services.faiss_session_cleanup import prune_stale_session_indexes, purge_all_session_indexes
+    from app.services.llm_service import LLMService
+    from app.services.pdf_processor import PDFProcessor
+    from app.services.session_vector_registry import SessionVectorRegistry
+
 
 SERVER_BOOT_ID = str(uuid.uuid4())
 

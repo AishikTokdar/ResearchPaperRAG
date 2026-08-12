@@ -34,8 +34,10 @@ def get_pdf_processor() -> PDFProcessor:
 def get_vector_registry() -> SessionVectorRegistry:
     global _vector_registry
     if _vector_registry is None:
-        raise RuntimeError("SessionVectorRegistry not initialized")
+        settings = get_settings()
+        _vector_registry = SessionVectorRegistry(settings.max_vector_sessions)
     return _vector_registry
+
 
 
 def require_session_id(
@@ -128,10 +130,14 @@ async def upload_pdf(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
+            err_msg = str(e)
+            if any(k in err_msg for k in ["Stream has ended unexpectedly", "EOF marker not found", "PdfReadError", "is not a valid PDF"]):
+                raise HTTPException(status_code=400, detail=f"Corrupt or invalid PDF file '{fname}': {err_msg}") from e
             raise HTTPException(
                 status_code=500,
-                detail=f"Error processing '{fname}': {str(e)}",
+                detail=f"Error processing '{fname}': {err_msg}",
             ) from e
+
 
     vector_service.create_from_documents(all_chunks)
     increment_pdf_uploads()

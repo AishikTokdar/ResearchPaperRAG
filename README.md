@@ -264,9 +264,9 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 Follow these steps to run ResearchPaperRAG natively on your local development machine.
 
 ### Prerequisites
-- Python 3.11 or Python 3.12
-- Node.js 18+ & npm 9+
-- Git
+- **Python**: 3.11 or 3.12 (Python 3.14 compatible)
+- **Node.js**: Node 18+ & npm 9+
+- **Git**
 
 ### Step 1: Clone Repository
 ```bash
@@ -275,9 +275,8 @@ cd ResearchPaperRAG
 ```
 
 ### Step 2: Configure Backend & Install Python Dependencies
-```bash
-cd backend
 
+```bash
 # Create Python virtual environment
 python -m venv .venv
 
@@ -287,41 +286,56 @@ python -m venv .venv
 # Linux / macOS:
 source .venv/bin/activate
 
-# Upgrade pip and install dependencies
+# Upgrade pip and install backend requirements
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
-# Create .env from template and add your API key
-cp .env.example .env
+# Configure backend environment (.env)
+cp backend/.env.example backend/.env
 ```
 
-### Step 3: Launch Backend Server
+### Step 3: Launch Backend Server (FastAPI + Uvicorn)
 
-#### Development Mode (Uvicorn with Auto-Reload):
+Choose one of the following commands:
+
+#### From `backend/` directory:
 ```bash
+cd backend
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Step 4: Configure Frontend & Install Node Dependencies (New Terminal)
+#### Or from repository root:
+```bash
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+*The backend service will start at `http://127.0.0.1:8000`.*
+
+### Step 4: Configure & Launch Frontend SPA (New Terminal)
+
 ```bash
 cd frontend
 
 # Install Node dependencies
 npm install
 
-# Create frontend .env
+# Create frontend environment configuration (.env)
 cp .env.example .env
 
 # Launch Vite development server
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev
 ```
 
-### Step 5: Open Web Application
-- Research Gap Analyzer SPA: http://127.0.0.1:5173/chat
-- Home Landing Page: http://127.0.0.1:5173/
-- Swagger API Docs: http://127.0.0.1:8000/docs
+*The Vite dev server will start at `http://localhost:5173`.*
+
+### Step 5: Access Application & Documentation Links
+- **React SPA Frontend**: [http://localhost:5173](http://localhost:5173) (or [http://localhost:5173/chat](http://localhost:5173/chat))
+- **Interactive Swagger Sandbox**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **ReDoc Technical View**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+- **API Health Check**: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 
 ---
+
 
 ## Production Deployment with Gunicorn & Uvicorn
 

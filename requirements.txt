@@ -1,9 +1,9 @@
 # Research Gap Analyzer Root Requirements
 
 # Web App Frontend & UI
-streamlit>=1.35.0
 gradio>=5.0.0,<6.0.0
 spaces>=0.50.0
+
 
 # Academic Paper APIs
 arxiv>=2.1.0

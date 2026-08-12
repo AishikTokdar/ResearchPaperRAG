@@ -23,7 +23,15 @@ This repository holds the FastAPI + Gunicorn backend for **ResearchPaperRAG**—
 - `GET /models`: List pre-configured AI models & provider availability
 - `GET /pipeline-info`: 7-stage processing pipeline telemetry
 
-### Production Gunicorn Launch Command:
+### Launch Commands:
+
+#### Local Development Mode:
+```bash
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+#### Production Mode (Gunicorn + Uvicorn Workers):
 ```bash
 gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
+
