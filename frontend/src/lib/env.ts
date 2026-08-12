@@ -1,18 +1,8 @@
-/**
- * Environment resolution for Vite (Cloud & Local).
- *
- * 1. Localhost query parameter override (`?port=7860` or `?api_port=7860`):
- *    If present in `window.location.search` or session, targets local backend on specified port.
- * 2. Cloud deployment: Uses `VITE_API_BASE_URL` environment variable.
- * 3. Localhost fallback: Defaults to `http://localhost:8000`.
- */
-
 function trimTrailingSlashes(s: string): string {
   return s.replace(/\/+$/, "");
 }
 
 export function resolveApiBaseUrl(): string {
-  // 1. Check for browser query parameter ?port= or ?api_port= (used in local development)
   if (typeof window !== "undefined") {
     try {
       const search = window.location.search;
@@ -48,11 +38,8 @@ export function resolveApiBaseUrl(): string {
         return trimTrailingSlashes(storedUrl.trim());
       }
     } catch {
-      // Ignore sessionStorage/URL parsing error
     }
   }
-
-  // 2. Check environment variable VITE_API_BASE_URL (used in Cloud deployments)
   const raw = import.meta.env.VITE_API_BASE_URL;
   const trimmed = typeof raw === "string" ? raw.trim() : "";
 
@@ -67,7 +54,6 @@ export function resolveApiBaseUrl(): string {
     }
   }
 
-  // 3. Dev proxy target / backend port env vars
   const envProxyTarget = import.meta.env.VITE_DEV_PROXY_TARGET;
   if (typeof envProxyTarget === "string" && envProxyTarget.trim()) {
     return trimTrailingSlashes(envProxyTarget.trim());
@@ -83,7 +69,6 @@ export function resolveApiBaseUrl(): string {
     return `http://${host}:${String(envPort).trim()}`;
   }
 
-  // 4. Default localhost fallback
   const defaultHost =
     typeof window !== "undefined" && window.location.hostname
       ? window.location.hostname

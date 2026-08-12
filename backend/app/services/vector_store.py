@@ -10,7 +10,17 @@ os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
+import warnings
+
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from langchain_huggingface import HuggingFaceEmbeddings
+except (ImportError, ModuleNotFoundError):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings

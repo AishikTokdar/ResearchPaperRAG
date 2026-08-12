@@ -9,10 +9,16 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
+import warnings
+
 try:
-    from langchain_huggingface import HuggingFaceEmbeddings
-except ImportError:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from langchain_huggingface import HuggingFaceEmbeddings
+except (ImportError, ModuleNotFoundError):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from langchain_community.embeddings import HuggingFaceEmbeddings
 
 try:
     from langchain_chroma import Chroma
@@ -30,6 +36,12 @@ from langchain_openai import ChatOpenAI
 from langchain_community.llms import Ollama
 
 from ..config import AI_PROVIDERS, PROVIDER_PRIORITY, get_all_provider_api_keys
+from .model_health import (
+    is_auth_or_invalid_key_error,
+    record_failure,
+    record_invalid_key_failure,
+    record_success,
+)
 
 
 class GapAnalyzerEngine:
@@ -48,7 +60,9 @@ class GapAnalyzerEngine:
                 if hf_token and "HF_TOKEN" not in os.environ:
                     os.environ["HF_TOKEN"] = hf_token
                 
-                self._embeddings = HuggingFaceEmbeddings(model_name=self.embedding_model_name)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    self._embeddings = HuggingFaceEmbeddings(model_name=self.embedding_model_name)
             except Exception as e:
                 raise e
         return self._embeddings
@@ -392,12 +406,18 @@ RETRIEVED MULTI-PAPER CONTEXT:
                         pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
                         report = re.sub(pattern_bracket, rf'[\1]({url})', report)
 
+                record_success(provider, model_name)
                 return report
             except Exception as err:
+                if is_auth_or_invalid_key_error(err):
+                    record_invalid_key_failure(provider, model_name)
+                else:
+                    record_failure(model_name)
                 last_err = err
                 continue
 
         return f"Error: {str(last_err)}"
+
 
     def _generate_split_gap_report(
         self,
@@ -511,21 +531,37 @@ CONTEXT:
             return "Error: No papers indexed in vector store. Please fetch or upload papers first."
 
         unique_candidates = self._get_all_fallback_candidates(provider, model_name)
+        invalid_key_providers: list[str] = []
 
         for idx, (p_curr, m_curr) in enumerate(unique_candidates):
             res = self._try_single_generation(topic, p_curr, m_curr, api_key)
             if res and not res.strip().lower().startswith("error:"):
+                warn_prefix = ""
+                if invalid_key_providers:
+                    names = ", ".join([p.title() for p in invalid_key_providers])
+                    warn_prefix = f"> ⚠️ **[PROVIDER API KEY WARNING]** Provider(s) **{names}** were attempted during fallback, but failed due to an invalid/wrong API key. Execution continued through the fallback chain.\n\n"
                 if idx > 0:
                     notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`**, which successfully synthesized your 8-layer research report.\n\n"
-                    res = notice + res
+                    res = warn_prefix + notice + res
+                else:
+                    res = warn_prefix + res
                 return res
 
             res_split = self._generate_split_gap_report(topic, p_curr, m_curr, api_key)
             if res_split and not res_split.strip().lower().startswith("error:"):
+                warn_prefix = ""
+                if invalid_key_providers:
+                    names = ", ".join([p.title() for p in invalid_key_providers])
+                    warn_prefix = f"> ⚠️ **[PROVIDER API KEY WARNING]** Provider(s) **{names}** were attempted during fallback, but failed due to an invalid/wrong API key. Execution continued through the fallback chain.\n\n"
                 if idx > 0:
                     notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`** (with prompt splitting), which successfully synthesized your 8-layer research report.\n\n"
-                    res_split = notice + res_split
+                    res_split = warn_prefix + notice + res_split
+                else:
+                    res_split = warn_prefix + res_split
                 return res_split
+
+            if p_curr not in invalid_key_providers and is_auth_or_invalid_key_error(Exception(res or res_split or "")):
+                invalid_key_providers.append(p_curr)
 
         return (
             "> [SERVICE TEMPORARILY BUSY] The system could not complete the report synthesis across available AI model providers due to temporary rate limits or network congestion.\n\n"
@@ -588,8 +624,13 @@ Answer (with exact source citations and paper hyperlinks):"""
                 answer = re.sub(r'\s*\(\s*Chunk\s*\d+\s*\)', '', answer, flags=re.IGNORECASE)
                 answer = re.sub(r'\[\s*Chunk\s*\d+\s*\]', '', answer, flags=re.IGNORECASE)
 
+                record_success(provider, model_name)
                 return answer
             except Exception as e:
+                if is_auth_or_invalid_key_error(e):
+                    record_invalid_key_failure(provider, model_name)
+                else:
+                    record_failure(model_name)
                 last_err = e
                 continue
 
@@ -606,14 +647,25 @@ Answer (with exact source citations and paper hyperlinks):"""
             return "No documents available. Please load papers first."
 
         unique_candidates = self._get_all_fallback_candidates(provider, model_name)
+        invalid_key_providers: list[str] = []
 
         for idx, (p_curr, m_curr) in enumerate(unique_candidates):
             res = self._try_single_followup(question, p_curr, m_curr, api_key)
             if res and not res.strip().lower().startswith("error:"):
+                warn_prefix = ""
+                if invalid_key_providers:
+                    names = ", ".join([p.title() for p in invalid_key_providers])
+                    warn_prefix = f"> ⚠️ **[PROVIDER API KEY WARNING]** Provider(s) **{names}** were attempted during fallback, but failed due to an invalid/wrong API key. Execution continued through the fallback chain.\n\n"
                 if idx > 0:
                     notice = f"> [FALLBACK ALERT] The requested model ({provider.upper()} / `{model_name}`) was temporarily unavailable or hit API rate limits. Automatically failed over to **{p_curr.upper()} / `{m_curr}`**, which successfully answered your follow-up query.\n\n"
-                    res = notice + res
+                    res = warn_prefix + notice + res
+                else:
+                    res = warn_prefix + res
                 return res
+
+            if p_curr not in invalid_key_providers and is_auth_or_invalid_key_error(Exception(res or "")):
+                invalid_key_providers.append(p_curr)
+
 
         return (
             "> [SERVICE TEMPORARILY BUSY] The system could not answer your follow-up question across available AI model providers due to temporary rate limits or high network traffic.\n\n"

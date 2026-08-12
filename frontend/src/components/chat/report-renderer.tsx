@@ -228,14 +228,15 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
   const [copied, setCopied] = React.useState(false);
 
   const isNotice = cleanContent.startsWith(">") || cleanContent.includes("[NOTICE]");
-  const isFallbackAlert = cleanContent.includes("[FALLBACK ALERT]");
+  const isFallbackAlert = cleanContent.includes("[FALLBACK ALERT]") || cleanContent.includes("[PROVIDER API KEY WARNING]") || cleanContent.includes("[API KEY WARNING]");
   const isExhaustedAlert = cleanContent.includes("[ALL MODELS EXHAUSTED]") || cleanContent.startsWith("Error generating research gap report:");
 
   if ((isNotice || isFallbackAlert || isExhaustedAlert) && !sectionTitle) {
     let alertMessage = cleanContent
       .replace(/^>\s*/gm, "")
-      .replace(/\[(NOTICE|FALLBACK ALERT|ALL MODELS EXHAUSTED)\]/g, "")
+      .replace(/\[(NOTICE|FALLBACK ALERT|PROVIDER API KEY WARNING|API KEY WARNING|ALL MODELS EXHAUSTED)\]/g, "")
       .trim();
+
 
     if (cleanContent.startsWith("Error generating research gap report:")) {
       alertMessage = "All AI model providers (Groq, OpenRouter, Cerebras, SambaNova, Gemini) were temporarily unable to process the request due to API rate limits or token quota constraints.\n\n**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again.";

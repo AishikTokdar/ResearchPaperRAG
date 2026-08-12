@@ -1,9 +1,3 @@
-"""
-Application Configuration
-
-Manages environment variables, API keys, and provider configurations.
-"""
-
 import os
 import re
 from functools import lru_cache
@@ -13,7 +7,6 @@ from dotenv import load_dotenv
 from pydantic import AliasChoices, Field, computed_field
 from pydantic_settings import BaseSettings
 
-# Pydantic reads .env into Settings, but AIProvider uses os.getenv — load .env into os.environ first.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
@@ -69,11 +62,6 @@ class AIProvider:
         return bool(self.api_key)
 
 
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Supported AI providers (order = default fallback priority).
-# Groq is intentionally first; Gemini is the second-choice fallback.
-# ---------------------------------------------------------------------------
 AI_PROVIDERS: dict[str, AIProvider] = {
     "gemini": AIProvider(
         name="gemini",
@@ -161,26 +149,15 @@ AI_PROVIDERS: dict[str, AIProvider] = {
     ),
 }
 
-# Ordered priority for automatic free failover attempts
 PROVIDER_PRIORITY: list[str] = [
     "gemini", "cerebras", "sambanova", "groq", "huggingface", "openrouter",
 ]
 
 
 class Settings(BaseSettings):
-    """
-    Application settings loaded from environment variables.
-
-    All sensitive values should be set via environment variables,
-    not hardcoded in the codebase.
-    """
-
-    # Application
     app_name: str = "ResearchPaperRAG API"
     app_version: str = "2.0.0"
     debug: bool = False
-
-    # API Keys (loaded from environment)
     openrouter_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPENAI_API_KEY"),
@@ -201,34 +178,23 @@ class Settings(BaseSettings):
     hf_api_key: str | None = None
     openai_direct_api_key: str | None = None
 
-    # When false (default), direct OpenAI is not used for PDF embeddings — only OpenRouter
-    # (avoids 429/quota errors from a stale OPENAI_DIRECT_API_KEY). Set to true to allow
-    # api.openai.com as an embedding fallback after OpenRouter.
     embedding_openai_direct: bool = Field(default=False)
 
-    # Default AI settings
     default_model: str = "gemini-3.6-flash"
     default_provider: str = "gemini"
     temperature: float = 0.0
     max_tokens: int = 2048
 
-    # RAG settings
     chunk_size: int = 1000
     chunk_overlap: int = 200
     retrieval_k: int = 4
 
-    # FAISS persistence (per X-Chat-Session-Id under faiss_index/sessions/<uuid>/)
     faiss_persist_dir: str = "faiss_index"
     max_vector_sessions: int = Field(default=64, ge=4, le=10_000)
-    # 0 = disabled. Default 3 (demo): on each API startup remove session dirs older than N days
-    # (orphans after redeploys) and non-UUID junk under sessions/. Set 0 to skip.
     faiss_session_max_age_days: int = Field(default=3, ge=0, le=365)
 
-    # Per-IP sliding window (60s). 0 = disabled. Mitigates upload / ask spam and LRU flooding.
     rate_limit_upload_per_minute: int = Field(default=8, ge=0, le=500)
     rate_limit_ask_per_minute: int = Field(default=90, ge=0, le=5000)
-
-    # CORS — comma-separated (avoids pydantic-settings JSON parsing for List fields)
     cors_origins_csv: str | None = Field(
         default=None,
         validation_alias="CORS_ORIGINS",

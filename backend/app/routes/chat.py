@@ -170,6 +170,7 @@ async def _stream_pipeline(
         stream_question, optimised_chunks = optimised_pair
         answer = ""
         model_used = None
+        stream_warnings: list[str] = []
         async for event in llm_service.stream_answer_with_failover(
             question=stream_question,
             context_docs=optimised_chunks,
@@ -178,12 +179,21 @@ async def _stream_pipeline(
         ):
             if event.get("type") == "status":
                 yield sse("status", event)
+            elif event.get("type") == "warning":
+                msg = event.get("message", "")
+                if msg:
+                    stream_warnings.append(msg)
+                    yield sse("warning", {"message": msg})
             elif event.get("type") == "token":
                 content = event.get("content", "")
                 answer += content
                 yield sse("token", {"content": content})
             elif event.get("type") == "complete":
                 model_used = event.get("model_used")
+                if event.get("warnings"):
+                    for w in event.get("warnings"):
+                        if w not in stream_warnings:
+                            stream_warnings.append(w)
 
         context["model_used"] = model_used
         context["answer_length"] = len(answer)
@@ -215,8 +225,10 @@ async def _stream_pipeline(
                 if total_ms > 0
                 else round(time.time() - start, 3),
                 "sources": assembled.get("sources"),
+                "warnings": stream_warnings if stream_warnings else None,
             },
         )
+
 
     except Exception as exc:
         logger.exception("Streaming pipeline error")

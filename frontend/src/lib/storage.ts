@@ -1,13 +1,4 @@
-/**
- * Client-Side Storage Layer
- * Manages localStorage preferences and IndexedDB chat history sessions.
- */
-
 import type { ChatEntry } from "@/types";
-
-// ---------------------------------------------------------------------------
-// localStorage helpers — UI preferences
-// ---------------------------------------------------------------------------
 
 const LS_PREFIX = "document-rag:";
 
@@ -23,7 +14,6 @@ export function loadPreference<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (raw === null) return fallback;
-    // JSON parse lets us support booleans/objects, not only strings.
     return JSON.parse(raw) as T;
   } catch {
     return fallback;
@@ -34,24 +24,15 @@ export function savePreference<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* quota exceeded or private mode — silently skip */
   }
 }
 
 export const prefKeys = LS_KEYS;
 
-// ---------------------------------------------------------------------------
-// IndexedDB helpers — chat history per PDF session
-// ---------------------------------------------------------------------------
-
 const DB_NAME = "document-rag-db";
 const DB_VERSION = 1;
 const STORE_NAME = "chat-sessions";
 
-/**
- * Represents a single chat session stored in IndexedDB.
- * Keyed by `pdfName` so each PDF upload gets its own timeline.
- */
 export interface ChatSession {
   pdfName: string;
   entries: ChatEntry[];
@@ -65,7 +46,6 @@ function openDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        // keyPath keeps writes simple: store.put(session) performs upsert.
         db.createObjectStore(STORE_NAME, { keyPath: "pdfName" });
       }
     };
@@ -75,7 +55,6 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-/** Save (upsert) a chat session for a given PDF */
 export async function saveChatSession(
   pdfName: string,
   entries: ChatEntry[],
@@ -86,7 +65,6 @@ export async function saveChatSession(
     const store = tx.objectStore(STORE_NAME);
     const session: ChatSession = {
       pdfName,
-      // Normalize timestamps on write/read so mixed string/Date payloads do not leak.
       entries: entries.map((e) => ({
         ...e,
         timestamp: e.timestamp ? new Date(e.timestamp) : undefined,
@@ -99,11 +77,9 @@ export async function saveChatSession(
       tx.onerror = () => rej(tx.error);
     });
   } catch {
-    /* IndexedDB unavailable — silently skip */
   }
 }
 
-/** Load a previous chat session for a given PDF */
 export async function loadChatSession(
   pdfName: string,
 ): Promise<ChatEntry[]> {

@@ -73,7 +73,13 @@ Supplies comma-separated or space-separated API keys (`KEY_1,KEY_2,KEY_3`) acros
 ### 9. All-Model Failover Chain & Zero Error Leakage
 If a primary model fails, the fallback engine automatically traverses **all 30+ AI models** across all credentialed providers in priority order. If all models and keys fail, the UI displays a clean, user-friendly Markdown notice without leaking raw 500 error tracebacks.
 
+### 10. In-Memory Model Health Tracker & Real-Time Status Dashboard (`/api-status`)
+- **In-Memory Model Health Tracker**: Automatically tracks consecutive failure counts per model ID with an automatic threshold (`MAX_CONSECUTIVE_FAILURES = 3`). Resets failure counts on successful invocations and flags models/providers upon repeated HTTP/rate-limit exceptions.
+- **Runtime Summary Endpoint (`GET /runtime-summary`)**: Returns overall system status (`ok`, `degraded`, `error`) and provider statuses (`working`, `partial`, `unavailable`).
+- **Interactive Status Dashboard (`/api-status`)**: Dark-mode SPA page featuring real-time provider health badges, default model indicator, vector chunking metrics (`1000` chars chunk / `200` chars overlap), resolved base URL, and direct OpenAPI docs link.
+
 ---
+
 
 ## Structured 8-Layer Literature Synthesis Framework
 

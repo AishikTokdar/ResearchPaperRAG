@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { fetchRuntimeSummary } from "@/lib/api";
 import { joinApiUrl } from "@/lib/constants";
 import { resolveApiBaseUrl } from "@/lib/env";
-import type { RuntimeSummary } from "@/types";
+import type { RuntimeSummary, RuntimeProviderRow } from "@/types";
 
 export function ApiStatusPage() {
   const [data, setData] = React.useState<RuntimeSummary | null>(null);
@@ -47,6 +47,42 @@ export function ApiStatusPage() {
 
   const docsUrl = joinApiUrl("/docs");
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "working":
+        return "Working";
+      case "api_key_not_set":
+        return "API Key Not Set";
+      case "invalid_api_key":
+        return "Invalid API Key";
+      case "partial":
+        return "Partial";
+      case "unavailable":
+        return "Unavailable";
+      default:
+        return status;
+    }
+  };
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case "working":
+      case "ok":
+        return "success";
+      case "partial":
+      case "degraded":
+        return "warning";
+      case "invalid_api_key":
+      case "error":
+        return "destructive";
+      case "api_key_not_set":
+      case "unavailable":
+      default:
+        return "secondary";
+    }
+  };
+
+
   return (
     <PageWrapper>
       <SectionWrapper>
@@ -54,7 +90,7 @@ export function ApiStatusPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Activity className="w-5 h-5 text-emerald-500" />
+              <Activity className="w-5 h-5 text-emerald-500 animate-pulse" />
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
                 Backend System Status
               </h1>
@@ -90,8 +126,6 @@ export function ApiStatusPage() {
           </GlassCard>
         )}
 
-
-
         {/* Overview Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <GlassCard padding="default">
@@ -101,7 +135,7 @@ export function ApiStatusPage() {
                 <Server className="w-4 h-4" />
               </div>
               <div className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Badge variant={data?.status === "ok" ? "success" : "warning"}>
+                <Badge variant={getStatusBadgeVariant(data?.status ?? "")}>
                   {data?.status ?? (loading ? "Checking..." : "Offline")}
                 </Badge>
               </div>
@@ -145,27 +179,28 @@ export function ApiStatusPage() {
           </GlassCard>
         </div>
 
-        {/* Detailed Provider Status */}
-        {data?.providers && (
+        {/* Configured Providers Grid */}
+        {data?.providers_detail && data.providers_detail.length > 0 && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
               Configured Providers
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {Object.entries(data.providers).map(([pName, pStatus]) => (
-                <GlassCard key={pName} padding="default">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {data.providers_detail.map((prov: RuntimeProviderRow) => (
+                <GlassCard key={prov.id} padding="default">
                   <GlassCardContent className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 capitalize">
-                        {pName}
+                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {prov.display_name}
                       </h3>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Status: {String(pStatus)}
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        Status: <span>{getStatusLabel(prov.status)}</span>
                       </p>
                     </div>
-                    <Badge variant={pStatus === "working" ? "success" : "secondary"}>
-                      {String(pStatus)}
+                    <Badge variant={getStatusBadgeVariant(prov.status)}>
+                      {getStatusLabel(prov.status)}
                     </Badge>
+
                   </GlassCardContent>
                 </GlassCard>
               ))}

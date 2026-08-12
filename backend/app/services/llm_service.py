@@ -29,8 +29,16 @@ from ..config import (
     get_settings,
     provider_has_credentials,
 )
+from .model_health import (
+    is_auth_or_invalid_key_error,
+    record_failure,
+    record_invalid_key_failure,
+    record_success,
+)
 
 logger = logging.getLogger(__name__)
+
+
 
 
 class LLMService:
@@ -180,10 +188,10 @@ Answer: """
         question: str,
         context: str,
         preferred_model: str | None = None,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, list[str]]:
         """
         Try the preferred model first, then every other credentialed model in priority order.
-        Returns (answer, model_used).
+        Returns (answer, model_used, warnings).
         """
         prompt = ChatPromptTemplate.from_template(self.RAG_PROMPT_TEMPLATE)
         payload = {"context": context, "question": question}
@@ -196,6 +204,7 @@ Answer: """
             )
 
         failed_models: list[str] = []
+        invalid_key_providers: list[str] = []
 
         for provider, model_id in attempts:
             keys = self._resolve_llm_api_keys(provider)
@@ -209,9 +218,20 @@ Answer: """
                     llm = self._build_llm_with_key(provider, model_id, key)
                     chain = prompt | llm | StrOutputParser()
                     answer = chain.invoke(payload)
+                    record_success(provider.name, model_id)
                     logger.info("LLM succeeded: %s / %s", provider.name, model_id)
-                    return answer, model_id
+                    warnings = [
+                        f"Provider '{p.title()}' was attempted during fallback, but its API key was found to be invalid/wrong."
+                        for p in invalid_key_providers
+                    ]
+                    return answer, model_id, warnings
                 except Exception as exc:
+                    if is_auth_or_invalid_key_error(exc):
+                        record_invalid_key_failure(provider.name, model_id)
+                        if provider.name not in invalid_key_providers:
+                            invalid_key_providers.append(provider.name)
+                    else:
+                        record_failure(model_id)
                     failed_models.append(f"{provider.name}/{model_id}")
                     logger.warning("LLM %s/%s key attempt failed: %s", provider.name, model_id, exc)
 
@@ -243,18 +263,18 @@ Answer: """
         context_docs: list[Document],
         model: str | None = None,
         hybrid_mode: bool = True,
-    ) -> tuple[str, str, float]:
+    ) -> tuple[str, str, float, list[str]]:
         """
         Generate an answer using RAG with automatic failover.
 
         Returns:
-            Tuple of (answer, model_used, processing_time_seconds)
+            Tuple of (answer, model_used, processing_time_seconds, warnings)
         """
         start_time = time.time()
         context = self._format_docs(context_docs)
-        answer, model_used = self._generate_with_failover(question, context, model or self.model)
+        answer, model_used, warnings = self._generate_with_failover(question, context, model or self.model)
         processing_time = time.time() - start_time
-        return answer, model_used, processing_time
+        return answer, model_used, processing_time, warnings
 
     async def stream_answer_with_failover(
         self,
@@ -269,7 +289,7 @@ Answer: """
         Yields dict events:
             {"type": "status", "stage": "failover", "message": "..."}
             {"type": "token", "content": "...", "model_used": "..."}
-            {"type": "complete", "model_used": "..."}
+            {"type": "complete", "model_used": "...", "warnings": [...]}
         """
         context = self._format_docs(context_docs)
         template_str = self.HYBRID_RAG_PROMPT_TEMPLATE if hybrid_mode else self.STRICT_RAG_PROMPT_TEMPLATE
@@ -284,6 +304,7 @@ Answer: """
             )
 
         failed_models: list[str] = []
+        invalid_key_providers: list[str] = []
 
         for idx, (provider, model_id) in enumerate(attempts):
             keys = self._resolve_llm_api_keys(provider)
@@ -313,14 +334,31 @@ Answer: """
                             }
 
                     if got_tokens:
+                        record_success(provider.name, model_id)
                         logger.info("LLM stream succeeded: %s / %s", provider.name, model_id)
-                        yield {"type": "complete", "model_used": model_id}
+                        warnings = [
+                            f"Provider '{p.title()}' was attempted during fallback, but its API key was found to be invalid/wrong."
+                            for p in invalid_key_providers
+                        ]
+                        yield {"type": "complete", "model_used": model_id, "warnings": warnings}
                         return
                 except Exception as exc:
+                    if is_auth_or_invalid_key_error(exc):
+                        record_invalid_key_failure(provider.name, model_id)
+                        if provider.name not in invalid_key_providers:
+                            invalid_key_providers.append(provider.name)
+                            yield {
+                                "type": "warning",
+                                "message": f"Provider '{provider.name.title()}' was attempted during fallback, but its API key was found to be invalid/wrong.",
+                            }
+                    else:
+                        record_failure(model_id)
                     failed_models.append(f"{provider.name}/{model_id}")
                     logger.warning(
                         "LLM stream %s/%s failed: %s", provider.name, model_id, exc
                     )
+
+
 
         raise RuntimeError(
             f"All configured AI providers ({', '.join(failed_models)}) failed. "

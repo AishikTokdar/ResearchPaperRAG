@@ -49,6 +49,8 @@ class AnswerResponse(BaseModel):
     model_used: str | None = None
     sources: list[str] | None = None
     processing_time: float | None = None
+    warnings: list[str] | None = None
+
 
 
 class DocumentFileMeta(BaseModel):

@@ -1,18 +1,3 @@
-"""
-Agent Pipeline
-
-Orchestrates the full 7-agent RAG pipeline in sequence:
-
-  Extractor → Analyzer → Preprocessor → Optimizer
-       → Synthesizer → Validator → Assembler
-
-Each agent receives the previous agent's output plus a shared context dict.
-
-Teaching tip: trace ``run()`` top-to-bottom — each ``_step`` passes the *output*
-of agent N as the *input* to agent N+1, while ``context`` accumulates shared
-metadata (question text, model id, flags) every agent may read.
-"""
-
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -80,7 +65,6 @@ class AgentPipeline:
         self.llm_service = llm_service
         self.retrieval_k = retrieval_k
 
-        # Instantiate every agent in execution order
         self.extractor = ExtractorAgent(vector_service, k=retrieval_k)
         self.analyzer = AnalyzerAgent()
         self.preprocessor = PreprocessorAgent()
@@ -88,10 +72,6 @@ class AgentPipeline:
         self.synthesizer = SynthesizerAgent(llm_service)
         self.validator = ValidatorAgent()
         self.assembler = AssemblerAgent()
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _fail(
@@ -117,14 +97,9 @@ class AgentPipeline:
         results: list[AgentResult],
     ):
         """Run one agent step, accumulate results, return (ok, output, total_ms_delta)."""
-        # Agent contract: ``data`` is step-specific input, ``context`` is shared mutable metadata.
         result = agent.execute(data, context)
         results.append(result)
         return result.success, result.data, result.duration_ms, result.error
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def run(
         self,
@@ -153,25 +128,21 @@ class AgentPipeline:
         total_ms = 0.0
 
         try:
-            # 1 ── Extractor (question → chunks)
             ok, chunks, ms, err = self._step(self.extractor, question, context, results)
             total_ms += ms
             if not ok:
                 return self._fail(err or "Extractor failed", results, total_ms, context)
 
-            # 2 ── Analyzer (chunks → filtered_chunks)
             ok, filtered, ms, err = self._step(self.analyzer, chunks, context, results)
             total_ms += ms
             if not ok:
                 return self._fail(err or "Analyzer failed", results, total_ms, context)
 
-            # 3 ── Preprocessor (filtered_chunks → cleaned_chunks)
             ok, cleaned, ms, err = self._step(self.preprocessor, filtered, context, results)
             total_ms += ms
             if not ok:
                 return self._fail(err or "Preprocessor failed", results, total_ms, context)
 
-            # 4 ── Optimizer ((question, cleaned_chunks) → (question, optimised_chunks))
             ok, optimised_pair, ms, err = self._step(
                 self.optimizer, (question, cleaned), context, results
             )
@@ -179,25 +150,21 @@ class AgentPipeline:
             if not ok:
                 return self._fail(err or "Optimizer failed", results, total_ms, context)
 
-            # 5 ── Synthesizer ((question, optimised_chunks) → answer_text)
             ok, answer, ms, err = self._step(self.synthesizer, optimised_pair, context, results)
             total_ms += ms
             if not ok:
                 return self._fail(err or "Synthesizer failed", results, total_ms, context)
 
-            # 6 ── Validator (answer_text → validated_answer_text)
             ok, validated, ms, err = self._step(self.validator, answer, context, results)
             total_ms += ms
             if not ok:
                 return self._fail(err or "Validator failed", results, total_ms, context)
 
-            # 7 ── Assembler (validated_answer → structured dict)
             ok, assembled, ms, err = self._step(self.assembler, validated, context, results)
             total_ms += ms
             if not ok:
                 return self._fail(err or "Assembler failed", results, total_ms, context)
 
-            # Build final result from the assembled dict
             return PipelineResult(
                 success=True,
                 answer=assembled.get("answer"),

@@ -1,26 +1,7 @@
-/**
- * ChatContext
- *
- * Global context for chat state management.
- * Provides centralized state for PDF upload and chat functionality
- * across the application.  Now supports streaming and include_sources.
- *
- * Usage:
- * <ChatProvider>
- *   <YourApp />
- * </ChatProvider>
- *
- * const { isLoaded, sendMessage } = useChatContext();
- */
-
 import * as React from "react";
 import { api, ApiError, streamQuestion } from "@/lib/api";
 import { createChatEntry } from "@/lib/chat-history";
 import type { ChatEntry, PDFDocument } from "@/types";
-
-// ============================================================================
-// Types
-// ============================================================================
 
 interface ChatContextState {
   pdfDocument: PDFDocument | null;
@@ -49,15 +30,7 @@ interface ChatContextActions {
 
 type ChatContextValue = ChatContextState & ChatContextActions;
 
-// ============================================================================
-// Context
-// ============================================================================
-
 const ChatContext = React.createContext<ChatContextValue | null>(null);
-
-// ============================================================================
-// Initial State
-// ============================================================================
 
 const initialState: ChatContextState = {
   pdfDocument: null,
@@ -73,15 +46,10 @@ const initialState: ChatContextState = {
   streamingAnswer: null,
 };
 
-// ============================================================================
-// Provider Component
-// ============================================================================
-
 interface ChatProviderProps {
   children: React.ReactNode;
 }
 
-/** Global provider: exposes upload + chat + streaming via ``useChatContext`` (optional for pages outside the new chat hooks). */
 export function ChatProvider({ children }: ChatProviderProps) {
   const [state, setState] = React.useState<ChatContextState>(initialState);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -117,7 +85,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
     }
   }, []);
 
-  /** Send a chat message – chooses streaming or standard based on toggle */
   const sendMessage = React.useCallback(
     async (message: string) => {
       abortRef.current?.abort();

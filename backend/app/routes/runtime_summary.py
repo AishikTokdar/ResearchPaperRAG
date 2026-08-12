@@ -13,6 +13,7 @@ from ..config import (
     provider_has_credentials,
 )
 from ..models.schemas import RuntimeProviderRow, RuntimeSummaryResponse
+from ..services.model_health import get_provider_status
 from ..services.usage_counters import read_counters
 
 router = APIRouter(tags=["Runtime Summary & Metrics"])
@@ -23,46 +24,55 @@ _PROVIDER_LABELS: dict[str, str] = {
     "openai": "OpenAI",
     "gemini": "Google Gemini",
     "huggingface": "Hugging Face",
+    "cerebras": "Cerebras",
+    "sambanova": "SambaNova",
 }
 
 
 @router.get("/runtime-summary", response_model=RuntimeSummaryResponse)
 def runtime_summary() -> RuntimeSummaryResponse:
     settings = get_settings()
-    # Embedding chain is dynamic: only providers with usable credentials appear.
     chain = get_embedding_fallback_chain()
     emb_names = {p.name for p, _ in chain}
     rows: list[RuntimeProviderRow] = []
+
     for name, prov in AI_PROVIDERS.items():
-        llm = provider_has_credentials(prov)
+        has_creds = provider_has_credentials(prov)
         emb = name in emb_names
-        # "working" means both chat + embeddings are available for that provider family.
-        if llm and emb:
-            st = "working"
-        elif llm or emb:
-            st = "partial"
-        else:
-            st = "unavailable"
+        models = prov.models or []
+        st = get_provider_status(name, has_creds, models)
+        llm_ready = st in ("working", "partial")
+
         rows.append(
             RuntimeProviderRow(
                 id=name,
                 display_name=_PROVIDER_LABELS.get(name, name.replace("_", " ").title()),
-                llm_ready=llm,
+                llm_ready=llm_ready,
                 embedding_ready=emb,
                 status=st,
             )
         )
-    usable = sum(1 for r in rows if r.status in ("working", "partial"))
-    overall = "ok" if usable else "degraded"
-    # If zero LLM providers are ready, retrieval alone cannot answer questions.
-    if not any(r.llm_ready for r in rows):
-        overall = "error"
+
+    working_n = sum(1 for r in rows if r.status == "working")
+    partial_n = sum(1 for r in rows if r.status == "partial")
+    unavail_n = sum(1 for r in rows if r.status in ("unavailable", "api_key_not_set", "invalid_api_key"))
     llm_ready_n = sum(1 for r in rows if r.llm_ready)
+
+    if llm_ready_n == 0:
+        overall = "error"
+    elif working_n > 0 and unavail_n == 0 and partial_n == 0:
+        overall = "ok"
+    elif (working_n > 0 or partial_n > 0) and (partial_n > 0 or unavail_n > 0):
+        overall = "degraded"
+    else:
+        overall = "ok" if (working_n > 0 or partial_n > 0) else "error"
+
     total_pdf, total_chats = read_counters()
+
     return RuntimeSummaryResponse(
         status=overall,
         providers=len(rows),
-        working=usable,
+        working=working_n,
         app_version=settings.app_version,
         default_model=settings.default_model,
         providers_detail=rows,

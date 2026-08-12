@@ -100,7 +100,33 @@ export function FormattedMessageContent({ content }: { content: string }) {
       return;
     }
 
+    // Blockquote handling (Warnings & Fallback alerts)
+    if (trimmed.startsWith(">")) {
+      flushList(`list-${index}`);
+      const cleanQuote = trimmed.replace(/^>\s*/, "");
+      const isWarn =
+        cleanQuote.includes("[PROVIDER API KEY WARNING]") ||
+        cleanQuote.includes("[API KEY WARNING]") ||
+        cleanQuote.includes("[FALLBACK ALERT]") ||
+        cleanQuote.includes("⚠️");
+
+      elements.push(
+        <div
+          key={`quote-${index}`}
+          className={`p-3 rounded-lg border text-xs font-medium my-2 flex items-start gap-2.5 ${
+            isWarn
+              ? "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
+              : "bg-zinc-100 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+          }`}
+        >
+          <div className="flex-1">{renderFormattedInlineText(cleanQuote)}</div>
+        </div>
+      );
+      return;
+    }
+
     // Header 1, 2, 3
+
     if (trimmed.startsWith("### ")) {
       flushList(`list-${index}`);
       elements.push(
