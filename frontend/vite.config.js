@@ -6,10 +6,14 @@ import path from "path";
  * Frontend API URL is still `VITE_API_BASE_URL` in `src/lib/env.ts`.
  */
 export default defineConfig(function (_a) {
-    var _b;
+    var _b, _c;
     var mode = _a.mode;
     var env = loadEnv(mode, process.cwd(), "");
-    var proxyTarget = ((_b = env.VITE_DEV_PROXY_TARGET) === null || _b === void 0 ? void 0 : _b.trim()) || "http://127.0.0.1:8000";
+    var targetPort = env.VITE_BACKEND_PORT || env.PORT || "8000";
+    var proxyTarget = ((_b = env.VITE_DEV_PROXY_TARGET) === null || _b === void 0 ? void 0 : _b.trim()) ||
+        (((_c = env.VITE_API_BASE_URL) === null || _c === void 0 ? void 0 : _c.trim().startsWith("http"))
+            ? env.VITE_API_BASE_URL.trim()
+            : "http://127.0.0.1:".concat(targetPort));
     return {
         plugins: [react()],
         resolve: {

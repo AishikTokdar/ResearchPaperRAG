@@ -8,8 +8,13 @@ import path from "path";
  */
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const targetPort = env.VITE_BACKEND_PORT || env.PORT || "8000";
   const proxyTarget =
-    env.VITE_DEV_PROXY_TARGET?.trim() || "http://127.0.0.1:8000";
+    env.VITE_DEV_PROXY_TARGET?.trim() ||
+    (env.VITE_API_BASE_URL?.trim().startsWith("http")
+      ? env.VITE_API_BASE_URL.trim()
+      : `http://127.0.0.1:${targetPort}`);
+
 
   return {
     plugins: [react()],

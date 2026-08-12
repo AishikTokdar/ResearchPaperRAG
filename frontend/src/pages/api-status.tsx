@@ -14,7 +14,8 @@ import { GlassCard, GlassCardContent } from "@/components/ui/glass-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fetchRuntimeSummary } from "@/lib/api";
-import { API_BASE_URL, joinApiUrl } from "@/lib/constants";
+import { joinApiUrl } from "@/lib/constants";
+import { resolveApiBaseUrl } from "@/lib/env";
 import type { RuntimeSummary } from "@/types";
 
 export function ApiStatusPage() {
@@ -22,6 +23,7 @@ export function ApiStatusPage() {
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const activeApiUrl = resolveApiBaseUrl();
 
   const load = React.useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -58,7 +60,7 @@ export function ApiStatusPage() {
               </h1>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-              Base URL: {API_BASE_URL}
+              Base URL: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{activeApiUrl}</span>
             </p>
           </div>
 
@@ -84,9 +86,11 @@ export function ApiStatusPage() {
 
         {err && (
           <GlassCard padding="default" className="mb-6 border-red-500/50 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300">
-            <p className="text-sm font-medium">Failed to connect to backend: {err}</p>
+            <p className="text-sm font-medium">Failed to connect to backend ({activeApiUrl}): {err}</p>
           </GlassCard>
         )}
+
+
 
         {/* Overview Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

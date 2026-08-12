@@ -257,6 +257,8 @@ RATE_LIMIT_ASK_PER_MINUTE=90
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
+
+
 ---
 
 ## Local Quickstart & Execution Guide
@@ -334,7 +336,12 @@ npm run dev
 - **ReDoc Technical View**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 - **API Health Check**: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 
+> **Note on Custom Localhost Backend Ports (e.g. 7860)**:
+> If running the backend locally on a different port (e.g. 7860), you can append `?port=7860` to your browser URL (e.g. `http://localhost:5173/?port=7860`) or configure `VITE_API_BASE_URL` in `frontend/.env`.
+
 ---
+
+
 
 
 ## Production Deployment with Gunicorn & Uvicorn
