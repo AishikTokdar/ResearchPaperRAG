@@ -7,7 +7,7 @@ interface UseHealthReturn {
   status: HealthStatus;
 }
 
-const POLL_INTERVAL_MS = 60_000;
+const POLL_INTERVAL_MS = 150_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
 
 export function useHealth(): UseHealthReturn {
@@ -18,6 +18,7 @@ export function useHealth(): UseHealthReturn {
     let cancelled = false;
 
     const check = async () => {
+      if (document.visibilityState === "hidden") return;
       try {
         const res = await fetch(joinApiUrl("/health"), {
           signal: AbortSignal.timeout(12000),
@@ -50,6 +51,7 @@ export function useHealth(): UseHealthReturn {
       clearInterval(id);
     };
   }, []);
+
 
   return { status };
 }

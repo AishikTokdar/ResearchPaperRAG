@@ -26,7 +26,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from .config import get_settings
+    from .config import get_all_provider_api_keys, get_settings
     from .routes import (
         chat_router,
         gap_analyzer_router,
@@ -42,7 +42,7 @@ try:
     from .services.pdf_processor import PDFProcessor
     from .services.session_vector_registry import SessionVectorRegistry
 except (ImportError, ValueError):
-    from app.config import get_settings
+    from app.config import get_all_provider_api_keys, get_settings
     from app.routes import (
         chat_router,
         gap_analyzer_router,
@@ -53,6 +53,7 @@ except (ImportError, ValueError):
     )
     from app.routes.chat import set_llm_service
     from app.routes.upload import set_services as set_upload_services
+
     from app.services.faiss_session_cleanup import prune_stale_session_indexes, purge_all_session_indexes
     from app.services.llm_service import LLMService
     from app.services.pdf_processor import PDFProcessor
@@ -60,6 +61,25 @@ except (ImportError, ValueError):
 
 
 SERVER_BOOT_ID = str(uuid.uuid4())
+
+
+def print_startup_api_key_status():
+    provider_names = [
+        ("gemini", "Google Gemini"),
+        ("groq", "Groq"),
+        ("cerebras", "Cerebras"),
+        ("sambanova", "SambaNova"),
+        ("huggingface", "Hugging Face"),
+        ("openrouter", "OpenRouter"),
+    ]
+    for pname, display_name in provider_names:
+        keys = get_all_provider_api_keys(pname)
+        if len(keys) == 0:
+            print(f"API Key status for {display_name}: NOT SET")
+        elif len(keys) == 1:
+            print(f"API Key status for {display_name}: CONFIGURED (1 key)")
+        else:
+            print(f"API Key status for {display_name}: MULTIPLE KEYS SETUP ({len(keys)} keys configured)")
 
 
 @asynccontextmanager
@@ -71,6 +91,8 @@ async def lifespan(app: FastAPI):
 
     purged = purge_all_session_indexes()
     print(f"FAISS server restart purge: removed {purged} session directories")
+
+    print_startup_api_key_status()
 
     vector_registry = SessionVectorRegistry(settings.max_vector_sessions)
     llm_service = LLMService()
@@ -92,6 +114,7 @@ async def lifespan(app: FastAPI):
     yield
 
     print("Shutting down...")
+
 
 
 tags_metadata = [

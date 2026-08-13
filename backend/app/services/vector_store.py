@@ -81,7 +81,9 @@ class VectorStoreService:
             mk: dict[str, Any] = {"device": "cpu"}
             if key:
                 mk["token"] = key
-            return HuggingFaceEmbeddings(model_name=model, model_kwargs=mk)
+            ek: dict[str, Any] = {"normalize_embeddings": True}
+            return HuggingFaceEmbeddings(model_name=model, model_kwargs=mk, encode_kwargs=ek)
+
         if provider.name == "groq":
             key = self._resolve_api_key(provider)
             if not key:

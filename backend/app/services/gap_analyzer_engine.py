@@ -62,7 +62,14 @@ class GapAnalyzerEngine:
                 
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    self._embeddings = HuggingFaceEmbeddings(model_name=self.embedding_model_name)
+                    mk: dict[str, Any] = {"device": "cpu"}
+                    ek: dict[str, Any] = {"normalize_embeddings": True}
+                    self._embeddings = HuggingFaceEmbeddings(
+                        model_name=self.embedding_model_name,
+                        model_kwargs=mk,
+                        encode_kwargs=ek,
+                    )
+
             except Exception as e:
                 raise e
         return self._embeddings
@@ -277,20 +284,25 @@ class GapAnalyzerEngine:
             ]
         return [self._get_llm_with_key(provider=provider, model_name=model_name, api_key=api_key)]
 
-    def _get_balanced_documents(self, query: str, top_k_per_paper: int = 3, max_total_docs: int = 15) -> List[Document]:
+    def _get_balanced_documents(self, query: str, top_k_per_paper: int = 3, max_total_docs: int = 25) -> List[Document]:
         if not self.vector_store and not self.documents:
             return []
+
+        paper_docs_map: Dict[str, List[Document]] = {}
+        for p in self.paper_metadata_list:
+            title = p.get("title")
+            if title:
+                paper_docs_map[title] = []
 
         candidate_docs: List[Document] = []
         if self.vector_store:
             try:
-                candidate_docs = self.vector_store.similarity_search(query, k=30)
+                candidate_docs = self.vector_store.similarity_search(query, k=50)
             except Exception:
-                candidate_docs = list(self.documents[:30])
+                candidate_docs = list(self.documents)
         else:
-            candidate_docs = list(self.documents[:30])
+            candidate_docs = list(self.documents)
 
-        paper_docs_map: Dict[str, List[Document]] = {}
         for d in candidate_docs:
             p_title = d.metadata.get("paper_title") or d.metadata.get("source") or "Unknown Paper"
             if p_title not in paper_docs_map:
@@ -302,7 +314,7 @@ class GapAnalyzerEngine:
             if title and (title not in paper_docs_map or len(paper_docs_map[title]) == 0):
                 matching = [d for d in self.documents if d.metadata.get("paper_title") == title]
                 if matching:
-                    paper_docs_map[title] = matching[:top_k_per_paper]
+                    paper_docs_map[title] = matching
 
         balanced_docs: List[Document] = []
         paper_titles = list(paper_docs_map.keys())
@@ -312,12 +324,9 @@ class GapAnalyzerEngine:
                 docs_for_title = paper_docs_map[p_title]
                 if i < len(docs_for_title):
                     balanced_docs.append(docs_for_title[i])
-                    if len(balanced_docs) >= max_total_docs:
-                        break
-            if len(balanced_docs) >= max_total_docs:
-                break
 
         return balanced_docs if balanced_docs else candidate_docs[:max_total_docs]
+
 
     def _get_llm(self, provider: str = "gemini", model_name: str = "gemini-3.6-flash", api_key: Optional[str] = None):
         return self._get_llm_with_key(provider=provider, model_name=model_name, api_key=api_key)
@@ -384,10 +393,13 @@ Propose 2 to 3 novel, concrete, and actionable student or researcher paper proje
 
 RULES:
 - Maintain a clean, academic tone. Do NOT include any emojis or casual symbols.
+- EQUAL PAPER BALANCING: You MUST provide equal analytical depth, text volume, and coverage for EACH selected research paper. Do NOT write extensive text for some papers while providing minimal text for others. Ensure every paper in the context is synthesized with substantial detail across all relevant sections.
+- FORMATTING: Use ONLY standard GitHub Markdown syntax. Never generate ASCII box borders (such as `+----+`), raw code block backticks (` ``` `) around text or tables, or inline headers attached to code fences. Format all tables as clean markdown tables (`| Header 1 | Header 2 |` with `| --- | --- |`). Always place sub-headers (`### Header`) on their own separate lines with empty lines above and below.
 - EVERY research paper citation in sections 1-7 MUST be formatted as a hyperlinked Markdown title: `[Paper Title, Year](URL)`. Use the exact URL provided in the paper source context.
 - Example citation: `[Attention Is All You Need, 2024](https://arxiv.org/abs/1706.03762)`.
 - Clicking the paper name must open the original research paper link in a new tab.
 - Provide concrete technical details rather than vague generalities.
+
 
 ---
 RETRIEVED MULTI-PAPER CONTEXT:
@@ -398,6 +410,9 @@ RETRIEVED MULTI-PAPER CONTEXT:
                 chain = prompt | llm | StrOutputParser()
                 report = chain.invoke({"topic": topic, "context": formatted_context})
 
+                if "8. Novel Paper Suggestions" not in report or len(report.split("8. Novel Paper Suggestions")[-1].strip()) < 150:
+                    continue
+
                 for p in self.paper_metadata_list:
                     title = p.get("title", "").strip()
                     url = p.get("url") or p.get("pdf_url") or ""
@@ -405,9 +420,12 @@ RETRIEVED MULTI-PAPER CONTEXT:
                         escaped_title = re.escape(title)
                         pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
                         report = re.sub(pattern_bracket, rf'[\1]({url})', report)
+                        pattern_plain = rf'(?<!\[)(?<!\()({escaped_title})(?!\])(?!\))'
+                        report = re.sub(pattern_plain, rf'[\1]({url})', report)
 
                 record_success(provider, model_name)
-                return report
+                return self._clean_report_markdown(report)
+
             except Exception as err:
                 if is_auth_or_invalid_key_error(err):
                     record_invalid_key_failure(provider, model_name)
@@ -418,6 +436,20 @@ RETRIEVED MULTI-PAPER CONTEXT:
 
         return f"Error: {str(last_err)}"
 
+    @staticmethod
+    def _clean_report_markdown(report: str) -> str:
+        if not report or not isinstance(report, str):
+            return report
+
+        cleaned = re.sub(r'```+\s*(###?\s+[^\n]+)', r'\n\n\1', report)
+        cleaned = re.sub(r'^\s*(?:```\s*)?[\+•\|]?\s*[\-\+=]{3,}.*$', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'^\s*[\+•\|]\s*[\-\+=]{3,}.*$', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'^\s*```[a-zA-Z]*\s*$', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'([^\n])\n(###?\s+)', r'\1\n\n\2', cleaned)
+        cleaned = re.sub(r'(###?\s+[^\n]+)\n([^\n#])', r'\1\n\n\2', cleaned)
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+
+        return cleaned.strip()
 
     def _generate_split_gap_report(
         self,
@@ -450,7 +482,7 @@ RETRIEVED MULTI-PAPER CONTEXT:
 
                 batch_1_prompt = """You are an academic research assistant.
 Analyze the provided paper context for topic: "{topic}".
-Generate Part 1 of the research report covering strictly these 4 sections:
+Generate Part 1 of the research report covering strictly these 3 sections:
 
 ## 1. Literature Summary
 Provide a clear, high-level synthesis summarizing core objectives and contributions of analyzed papers.
@@ -461,11 +493,9 @@ Identify emerging technological, architectural, or domain trends in recent publi
 ## 3. Common Methods
 Detail key methodologies, algorithms, models, datasets, and experimental frameworks.
 
-## 4. Limitations
-Identify recurring methodological weaknesses, dataset constraints, or evaluation bottlenecks.
-
 RULES:
 - Clean academic tone. No emojis or casual symbols.
+- EQUAL PAPER BALANCING: Provide equal text depth and coverage for EACH selected paper in the context.
 - Format citations as `[Paper Title, Year](URL)` using the exact URL in the context.
 
 CONTEXT:
@@ -474,7 +504,10 @@ CONTEXT:
 
                 batch_2_prompt = """You are an academic research assistant.
 Analyze the provided paper context for topic: "{topic}".
-Generate Part 2 of the research report covering strictly these 4 sections:
+Generate Part 2 of the research report covering strictly these 3 sections:
+
+## 4. Limitations
+Identify recurring methodological weaknesses, dataset constraints, evaluation bottlenecks, or scalability issues.
 
 ## 5. Contradictions
 Highlight any conflicting findings, opposing conclusions, or divergent experimental results between studies.
@@ -482,15 +515,34 @@ Highlight any conflicting findings, opposing conclusions, or divergent experimen
 ## 6. Research Gaps
 Detail specific unaddressed research gaps, missing benchmark evaluations, or unexplored application areas.
 
+RULES:
+- Clean academic tone. No emojis or casual symbols.
+- EQUAL PAPER BALANCING: Provide equal text depth and coverage for EACH selected paper in the context.
+- Format citations as `[Paper Title, Year](URL)` using the exact URL in the context.
+
+CONTEXT:
+{context}
+"""
+
+                batch_3_prompt = """You are an academic research assistant.
+Analyze the provided paper context for topic: "{topic}".
+Generate Part 3 of the research report covering strictly these 2 final sections:
+
 ## 7. Future Directions
 Outline strategic open problems and recommended research avenues for future academic work.
 
 ## 8. Novel Paper Suggestions
-Propose 2 to 3 novel, concrete, and actionable student/researcher paper project concepts.
+Propose 2 to 3 novel, concrete, and actionable student or researcher paper project concepts that directly address identified research gaps.
+For EACH project proposal, include:
+- **Project Title**: Clean descriptive academic title
+- **Core Problem Statement**: Specific bottleneck or gap addressed
+- **Proposed Solution & Methodology**: Technical architecture and algorithm design
+- **Abstract**: Complete multi-paragraph academic abstract detailing objectives, method, and expected impact.
+- **Expected Outcomes**: Key benchmarks and validation metrics.
 
 RULES:
 - Clean academic tone. No emojis or casual symbols.
-- Format citations as `[Paper Title, Year](URL)` using the exact URL in the context.
+- Complete all project concepts and abstracts fully without truncating any text mid-sentence.
 
 CONTEXT:
 {context}
@@ -498,12 +550,14 @@ CONTEXT:
 
                 p1_chain = ChatPromptTemplate.from_template(batch_1_prompt) | llm | StrOutputParser()
                 p2_chain = ChatPromptTemplate.from_template(batch_2_prompt) | llm | StrOutputParser()
+                p3_chain = ChatPromptTemplate.from_template(batch_3_prompt) | llm | StrOutputParser()
 
                 part1 = p1_chain.invoke({"topic": topic, "context": compact_context})
                 part2 = p2_chain.invoke({"topic": topic, "context": compact_context})
+                part3 = p3_chain.invoke({"topic": topic, "context": compact_context})
 
-                notice = "> [NOTICE] Large context detected. Prompt was automatically split into 2 focused generation batches (Sections 1-4 and Sections 5-8) to bypass API token limit constraints.\n\n"
-                full_report = f"# Research Analysis & Gap Report: {topic}\n\n{notice}{part1.strip()}\n\n{part2.strip()}"
+                notice = "> [NOTICE] Large context detected. Prompt was automatically split into 3 focused generation batches to ensure 100% complete synthesis across all 8 sections.\n\n"
+                full_report = f"# Research Analysis & Gap Report: {topic}\n\n{notice}{part1.strip()}\n\n{part2.strip()}\n\n{part3.strip()}"
 
                 for p in self.paper_metadata_list:
                     title = p.get("title", "").strip()
@@ -512,13 +566,17 @@ CONTEXT:
                         escaped_title = re.escape(title)
                         pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
                         full_report = re.sub(pattern_bracket, rf'[\1]({url})', full_report)
+                        pattern_plain = rf'(?<!\[)(?<!\()({escaped_title})(?!\])(?!\))'
+                        full_report = re.sub(pattern_plain, rf'[\1]({url})', full_report)
 
-                return full_report
+                return self._clean_report_markdown(full_report)
+
             except Exception as err:
                 last_err = err
                 continue
 
         return f"Error: {str(last_err)}"
+
 
     def generate_gap_report(
         self,
@@ -615,8 +673,9 @@ Answer (with exact source citations and paper hyperlinks):"""
                         escaped_title = re.escape(title)
                         pattern_bracket = rf'\[({escaped_title}[^\]]*)\](?!\()'
                         answer = re.sub(pattern_bracket, rf'[\1]({url})', answer)
+                        pattern_plain = rf'(?<!\[)(?<!\()({escaped_title})(?!\])(?!\))'
+                        answer = re.sub(pattern_plain, rf'[\1]({url})', answer)
 
-                # Strip internal chunk identifiers like | Chunk 19, (Chunk 19), [Chunk 19]
                 answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]', r'[\1](\2)', answer, flags=re.IGNORECASE)
                 answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]', r'[\1](\2)', answer)
                 answer = re.sub(r'\[\[([^\]]+)\]\(([^)]+)\)\]', r'[\1](\2)', answer)
@@ -625,7 +684,8 @@ Answer (with exact source citations and paper hyperlinks):"""
                 answer = re.sub(r'\[\s*Chunk\s*\d+\s*\]', '', answer, flags=re.IGNORECASE)
 
                 record_success(provider, model_name)
-                return answer
+                return self._clean_report_markdown(answer)
+
             except Exception as e:
                 if is_auth_or_invalid_key_error(e):
                     record_invalid_key_failure(provider, model_name)

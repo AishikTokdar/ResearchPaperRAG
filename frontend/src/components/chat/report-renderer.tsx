@@ -1,11 +1,26 @@
 import * as React from "react";
 import { Download, FileText, FileCode, Printer, ExternalLink, Copy, Check, AlertTriangle } from "lucide-react";
+// @ts-ignore
+import html2pdf from "html2pdf.js";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
 
 interface ReportRendererProps {
   report: string;
   topic: string;
+}
+
+function getReportFilename(topic: string, ext: string): string {
+  const cleanTopic = (topic || "research")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s_-]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 60);
+
+  return `${cleanTopic}_gap_report.${ext}`;
 }
 
 export function ReportRenderer({ report, topic }: ReportRendererProps) {
@@ -28,129 +43,109 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `research_report_${Date.now()}.md`;
+    a.download = getReportFilename(topic, "md");
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const handleDownloadTxt = () => {
-    const plainText = report
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)")
-      .replace(/\[\*\*([^*]+)\*\*\]/g, "[$1]")
-      .replace(/#+\s?/g, "")
-      .replace(/\*\*/g, "")
-      .replace(/\*/g, "")
-      .replace(/\|/g, " ")
-      .replace(/-{3,}/g, "");
+    const sanitized = sanitizeReportMarkdown(report);
+    let plainText = sanitized
+      .replace(/^#\s+[^\n]+\n*/m, "")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 (Link: $2)")
+      .replace(/\[\*\*([^*]+)\*\*\]/g, "$1")
+      .replace(/\[([^\]]+)\]/g, "$1")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/^##\s*(.+)$/gm, "\n================================================================================\n$1\n================================================================================")
+      .replace(/^###\s*(.+)$/gm, "\n--- $1 ---")
+      .replace(/^[*-]\s+/gm, "  • ")
+      .replace(/^\d+\.\s+/gm, (m) => `  ${m}`)
+      .replace(/\|/g, "  ")
+      .replace(/^\s*[\+•\|]?\s*[\-\+=]{3,}.*$/gm, "")
+      .replace(/```[a-zA-Z]*/g, "")
+      .replace(/\n{3,}/g, "\n\n");
 
-    const blob = new Blob([plainText], { type: "text/plain" });
+    const header = `RESEARCH ANALYSIS & GAP REPORT\nTopic: ${topic}\n\n`;
+    const blob = new Blob([header + plainText.trim()], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `research_report_${Date.now()}.txt`;
+    a.download = getReportFilename(topic, "txt");
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadPdf = () => {
-    const printWin = window.open("", "_blank", "width=900,height=1000");
-    if (!printWin) return;
-
+  const handleDownloadPdf = async () => {
     const parsedHtml = renderMarkdownToHtmlString(report);
+    const container = document.createElement("div");
+    container.style.padding = "24px";
+    container.style.maxWidth = "800px";
+    container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+    container.style.color = "#1f2937";
+    container.style.backgroundColor = "#ffffff";
+    container.style.lineHeight = "1.65";
 
-    printWin.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Research Analysis & Gap Report - ${topic}</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              color: #18181b;
-              line-height: 1.6;
-              padding: 40px;
-              max-width: 900px;
-              margin: 0 auto;
-            }
-            h1 {
-              font-size: 24px;
-              font-weight: 800;
-              border-bottom: 2px solid #e4e4e7;
-              padding-bottom: 12px;
-              margin-bottom: 24px;
-            }
-            h2 {
-              font-size: 18px;
-              font-weight: 700;
-              color: #27272a;
-              margin-top: 28px;
-              margin-bottom: 12px;
-              border-bottom: 1px solid #f4f4f5;
-              padding-bottom: 6px;
-            }
-            p {
-              margin-bottom: 12px;
-              font-size: 14px;
-            }
-            a {
-              color: #4f46e5;
-              font-weight: 600;
-              text-decoration: underline;
-            }
-            a:hover {
-              color: #3730a3;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 16px 0;
-              font-size: 13px;
-            }
-            th, td {
-              border: 1px solid #e4e4e7;
-              padding: 8px 12px;
-              text-align: left;
-            }
-            th {
-              background-color: #f4f4f5;
-              font-weight: 600;
-            }
-            ul, ol {
-              padding-left: 24px;
-              margin-bottom: 12px;
-            }
-            li {
-              margin-bottom: 6px;
-              font-size: 13.5px;
-            }
-            .citation {
-              background-color: #e0e7ff;
-              color: #3730a3;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-family: monospace;
-              font-size: 11px;
-              border: 1px solid #c7d2fe;
-            }
-            @media print {
-              body { padding: 20px; }
-              @page { margin: 1.5cm; }
-              a { color: #4f46e5 !important; text-decoration: underline !important; }
-            }
-          </style>
-        </head>
-        <body>
-          <h1>Research Analysis & Gap Report: ${topic}</h1>
-          <div>${parsedHtml}</div>
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-      </html>
-    `);
-    printWin.document.close();
+    container.innerHTML = `
+      <div style="border-bottom: 3px solid #4f46e5; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 800; color: #111827; margin: 0 0 4px 0;">Research Analysis & Gap Report</h1>
+          <div style="font-size: 13px; color: #4f46e5; font-weight: 600;">Topic: ${topic}</div>
+        </div>
+        <div style="font-size: 10.5px; color: #6b7280; font-weight: 500;">AI Research Synthesis</div>
+      </div>
+      <div>${parsedHtml}</div>
+      <div style="margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 10px; font-size: 10.5px; color: #6b7280; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: 500; color: #4b5563;">Research Analysis & Gap Report • ${topic}</span>
+        <span style="background: #eef2ff; color: #4f46e5; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 10px; border: 1px solid #c7d2fe;">Interactive PDF</span>
+      </div>
+    `;
+
+    document.body.appendChild(container);
+
+    const opt = {
+      margin: [12, 12, 15, 12] as [number, number, number, number],
+      filename: getReportFilename(topic, "pdf"),
+      image: { type: "jpeg" as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
+    };
+
+
+    try {
+      await html2pdf().set(opt).from(container).save();
+      toast.success("PDF report downloaded directly with clickable links!");
+    } catch {
+      const printWin = window.open("", "_blank", "width=900,height=1000");
+      if (printWin) {
+        printWin.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Research Analysis & Gap Report - ${topic}</title>
+              <style>
+                body { font-family: sans-serif; padding: 20px; color: #1f2937; }
+                a { color: #4f46e5; text-decoration: underline; }
+              </style>
+            </head>
+            <body>
+              <div style="border-bottom: 2px solid #4f46e5; padding-bottom: 10px; margin-bottom: 20px;">
+                <h1>Research Analysis & Gap Report</h1>
+                <div>Topic: ${topic}</div>
+              </div>
+              <div>${parsedHtml}</div>
+              <script>window.onload = function() { window.print(); }</script>
+            </body>
+          </html>
+        `);
+        printWin.document.close();
+      }
+    } finally {
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
+    }
   };
 
   return (
@@ -196,8 +191,39 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
   );
 }
 
+export function sanitizeReportMarkdown(raw: string): string {
+  if (!raw) return "";
+
+  let cleaned = raw;
+
+  // 1. Separate subheaders directly attached to code fences like ``` ### Header
+  cleaned = cleaned.replace(/```+\s*(###?\s+[^\n]+)/g, "\n\n$1");
+
+  // 2. Strip ASCII box drawing borders like +-----------------+-----------------+ or • +-------+
+  cleaned = cleaned.replace(/^\s*(?:```\s*)?[\+•\|]?\s*[\-\+=]{3,}.*$/gm, "");
+  cleaned = cleaned.replace(/^\s*[\+•\|]\s*[\-\+=]{3,}.*$/gm, "");
+
+  // 3. Remove orphaned backtick lines
+  cleaned = cleaned.replace(/^\s*```[a-zA-Z]*\s*$/gm, "");
+
+  // 4. Normalize section headers to standard "## N. Section Title"
+  cleaned = cleaned.replace(/^###?\s*(\d+\.\s+[^\n]+?)\:?\s*$/gm, "## $1");
+  cleaned = cleaned.replace(/^\*\*\s*(\d+\.\s+[^*]+)\s*\*\*:?\s*$/gm, "## $1");
+
+  // 5. Ensure headers (## and ###) have clean newlines around them
+  cleaned = cleaned.replace(/([^\n])\n(###?\s+)/g, "$1\n\n$2");
+  cleaned = cleaned.replace(/(###?\s+[^\n]+)\n([^\n#])/g, "$1\n\n$2");
+
+  // 6. Clean up multiple empty lines
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+
+  return cleaned.trim();
+}
+
+
 function ReportSectionsRenderer({ report }: { report: string }) {
-  let cleanedReport = report.replace(/^#\s+[^\n]+\n*/m, "").trim();
+  const sanitized = sanitizeReportMarkdown(report);
+  let cleanedReport = sanitized.replace(/^#\s+[^\n]+\n*/m, "").trim();
   cleanedReport = cleanedReport.replace(/^(---|---|\|\-\-+)\s*\n*/m, "").trim();
 
   const rawSections = cleanedReport.split(/(?=\n##\s|^##\s)/g);
@@ -224,6 +250,7 @@ function ReportSectionsRenderer({ report }: { report: string }) {
   );
 }
 
+
 function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: string | null; cleanContent: string }) {
   const [copied, setCopied] = React.useState(false);
 
@@ -243,11 +270,10 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
     }
 
     return (
-      <div className={`p-4.5 rounded-xl text-xs sm:text-sm font-medium flex items-start gap-3 shadow-xs border ${
-        isExhaustedAlert
+      <div className={`p-4.5 rounded-xl text-xs sm:text-sm font-medium flex items-start gap-3 shadow-xs border ${isExhaustedAlert
           ? "bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200"
           : "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
-      }`}>
+        }`}>
         <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`} />
         <div className="flex-1 leading-relaxed">
           <FormattedBlock text={alertMessage} />
@@ -440,11 +466,10 @@ export function FormattedBlock({ text }: { text: string }) {
                 return (
                   <div
                     key={pIdx}
-                    className={`my-2 p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 border ${
-                      isExhaustedAlert
+                    className={`my-2 p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 border ${isExhaustedAlert
                         ? "bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200"
                         : "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
-                    }`}
+                      }`}
                   >
                     <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`} />
                     <div className="flex-1 leading-relaxed">
@@ -454,11 +479,21 @@ export function FormattedBlock({ text }: { text: string }) {
                 );
               }
 
+              if (cleanP.startsWith("### ")) {
+                return (
+                  <h4 key={pIdx} className="text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-4 mb-1.5 tracking-tight flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block"></span>
+                    <RichInlineText text={cleanP.replace(/^###\s+/, "")} />
+                  </h4>
+                );
+              }
+
               return (
                 <p key={pIdx} className="leading-relaxed">
                   <RichInlineText text={cleanP.replace(/\n/g, " ")} />
                 </p>
               );
+
             })}
           </React.Fragment>
         );
@@ -574,14 +609,14 @@ function RichInlineText({ text }: { text: string }) {
             href={finalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-xs transition-colors my-0.5 mx-0.5 break-all"
+            className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline inline gap-1 text-sm underline decoration-indigo-300 dark:decoration-indigo-700 underline-offset-2 transition-colors mx-0.5"
             title="Open research paper in a new tab"
           >
-            <span>{rawText}</span>
-            <ExternalLink className="w-3 h-3 inline shrink-0 text-indigo-500" />
+            {rawText} <ExternalLink className="w-3 h-3 inline align-baseline ml-0.5 text-indigo-500" />
           </a>
         );
-      } else {
+      }
+      else {
         parts.push(
           <span
             key={key}
@@ -634,51 +669,104 @@ function RichInlineText({ text }: { text: string }) {
 }
 
 function renderMarkdownToHtmlString(markdown: string): string {
-  let cleanMd = markdown.replace(/\[\*\*([^*]+)\*\*\]/g, "[$1]");
+  const sanitized = sanitizeReportMarkdown(markdown);
+  let cleanMd = sanitized.replace(/^#\s+[^\n]+\n*/m, "").trim();
+
+  cleanMd = cleanMd.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]/gi, "[$1]($2)");
+  cleanMd = cleanMd.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]/g, "[$1]($2)");
+  cleanMd = cleanMd.replace(/\[\[([^\]]+)\]\(([^)]+)\)\]/g, "[$1]($2)");
+  cleanMd = cleanMd.replace(/\[\*\*([^*]+)\*\*\]\(([^)]+)\)/g, "[$1]($2)");
+  cleanMd = cleanMd.replace(/\[\*\*([^*]+)\*\*\]/g, "[$1]");
+
+  cleanMd = cleanMd.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, rawText, rawUrl) => {
+    const titleText = rawText.replace(/[\*\_]/g, "").trim();
+    const url = normalizeUrl(rawUrl);
+    const href = url.startsWith("http") ? url : `https://${url}`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="paper-link" style="color: #4f46e5; font-weight: 600; text-decoration: underline; font-size: 13px; display: inline;">${titleText} &#x2197;</a>`;
+  });
+
+  cleanMd = cleanMd.replace(/\[([^\]]+)\]/g, '<span class="citation">[$1]</span>');
 
   let html = cleanMd
-    .replace(/^#\s+(.+)$/gm, "<h1>$1</h1>")
     .replace(/^##\s+(.+)$/gm, "<h2>$1</h2>")
     .replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">$1 &#x2197;</a>')
-    .replace(/\[([^\]]+)\]/g, '<span class="citation">[$1]</span>');
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
   const lines = html.split("\n");
-  let inTable = false;
-  let tableHtml = "";
   const outputLines: string[] = [];
+  let tableLinesBuffer: string[] = [];
 
-  for (const line of lines) {
-    if (line.trim().startsWith("|")) {
-      if (line.includes("---")) continue;
-      if (!inTable) {
-        inTable = true;
-        tableHtml = "<table><tbody>";
-      }
+  const flushTable = () => {
+    if (tableLinesBuffer.length === 0) return;
+
+    let headerRowIndex = 0;
+    const separatorIdx = tableLinesBuffer.findIndex((l) => l.includes("---"));
+    if (separatorIdx > 0) {
+      headerRowIndex = separatorIdx - 1;
+    }
+
+    let tHtml = '<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; border: 1px solid #cbd5e1; table-layout: auto;">';
+    let inBody = false;
+    let dataRowCounter = 0;
+
+    tableLinesBuffer.forEach((line, idx) => {
+      if (line.includes("---")) return;
+
       const cells = line
         .split("|")
         .slice(1, -1)
-        .map((c) => `<td>${c.trim()}</td>`)
-        .join("");
-      tableHtml += `<tr>${cells}</tr>`;
-    } else {
-      if (inTable) {
-        inTable = false;
-        tableHtml += "</tbody></table>";
-        outputLines.push(tableHtml);
-        tableHtml = "";
+        .map((c) => c.trim());
+
+      if (idx === headerRowIndex && !inBody) {
+        tHtml += '<thead style="background-color: #4f46e5; color: #ffffff;"><tr>';
+        tHtml += cells
+          .map((c) => `<th style="padding: 10px 12px; border: 1px solid #3730a3; font-weight: 700; text-align: left; font-size: 12px; line-height: 1.4; color: #ffffff; background-color: #4f46e5;">${c}</th>`)
+          .join("");
+        tHtml += '</tr></thead>';
+      } else {
+        if (!inBody) {
+          inBody = true;
+          tHtml += '<tbody>';
+        }
+        dataRowCounter++;
+        const rowBg = dataRowCounter % 2 === 0 ? "#f8fafc" : "#ffffff";
+        tHtml += `<tr style="background-color: ${rowBg};">`;
+        tHtml += cells
+          .map((c) => `<td style="padding: 9px 12px; border: 1px solid #e2e8f0; color: #1e293b; vertical-align: top; font-size: 12px; line-height: 1.5; background-color: ${rowBg};">${c}</td>`)
+          .join("");
+        tHtml += '</tr>';
       }
-      if (!line.trim().match(/^(---|---|\|\-\-+|\*\*\*)$/)) {
-        outputLines.push(line ? `<p>${line}</p>` : "");
+    });
+
+    if (inBody) {
+      tHtml += '</tbody>';
+    }
+    tHtml += '</table>';
+    outputLines.push(tHtml);
+    tableLinesBuffer = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("|")) {
+      tableLinesBuffer.push(trimmed);
+    } else if (tableLinesBuffer.length > 0 && trimmed === "") {
+      continue;
+    } else {
+      flushTable();
+      if (trimmed.startsWith("<h2>") && trimmed.endsWith("</h2>")) {
+        outputLines.push(`<h2 style="font-size: 18px; font-weight: 800; color: #111827; margin-top: 24px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #6366f1;">${trimmed.slice(4, -5)}</h2>`);
+      } else if (trimmed.match(/^(\d+\.\s+(Literature Summary|Trend Detection|Common Methods|Limitations|Contradictions|Research Gaps|Future Directions|Novel Paper Suggestions))/i)) {
+        outputLines.push(`<h2 style="font-size: 18px; font-weight: 800; color: #111827; margin-top: 24px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #6366f1;">${trimmed}</h2>`);
+      } else if (trimmed.match(/^\d+\.\s+/)) {
+        outputLines.push(`<p style="font-size: 13.5px; line-height: 1.65; color: #374151; margin-bottom: 8px; font-weight: 600; padding-left: 12px;">${trimmed}</p>`);
+      } else if (!trimmed.match(/^(---|---|\|\-\-+|\*\*\*)$/)) {
+        outputLines.push(trimmed ? `<p style="font-size: 13.5px; line-height: 1.65; color: #374151; margin-bottom: 12px;">${trimmed}</p>` : "");
       }
     }
   }
 
-  if (inTable) {
-    tableHtml += "</tbody></table>";
-    outputLines.push(tableHtml);
-  }
-
+  flushTable();
   return outputLines.join("");
 }
+
