@@ -1,3 +1,4 @@
+import concurrent.futures
 import os
 import re
 import tempfile
@@ -21,7 +22,7 @@ def is_valid_recent_year(year_str: str) -> bool:
 
 
 class PaperFetcher:
-    def __init__(self, timeout: int = 15):
+    def __init__(self, timeout: int = 5):
         self.timeout = timeout
         self.headers = {
             "User-Agent": "ResearchGapAnalyzer/2.0 (mailto:academic-rag@example.com)"
@@ -31,9 +32,13 @@ class PaperFetcher:
         papers = []
         try:
             import arxiv
-            client = arxiv.Client()
+            # Sanitize and truncate extra long search phrases for arXiv API
+            clean_q = re.sub(r"[^\w\s]", " ", query).strip()
+            search_q = " ".join(clean_q.split()[:10]) if len(clean_q.split()) > 10 else clean_q
+
+            client = arxiv.Client(page_size=limit * 2, delay_seconds=1, num_retries=1)
             search = arxiv.Search(
-                query=query,
+                query=search_q,
                 max_results=limit * 2,
                 sort_by=arxiv.SortCriterion.Relevance
             )
@@ -58,7 +63,7 @@ class PaperFetcher:
                 })
                 if len(papers) >= limit:
                     break
-        except Exception as e:
+        except Exception:
             try:
                 encoded_query = urllib.parse.quote(query)
                 url = f"http://export.arxiv.org/api/query?search_query=all:{encoded_query}&start=0&max_results={limit * 2}"
@@ -338,18 +343,36 @@ class PaperFetcher:
         return papers
 
     def search_all(self, query: str, limit_per_source: int = 3) -> List[Dict[str, Any]]:
-        combined = []
-        seen_titles = set()
-
-        sources = [
-            self.search_arxiv(query, limit=limit_per_source),
-            self.search_crossref(query, limit=limit_per_source),
-            self.search_semantic_scholar(query, limit=limit_per_source),
-            self.search_openalex(query, limit=limit_per_source),
-            self.search_pubmed(query, limit=limit_per_source),
-            self.search_doaj(query, limit=limit_per_source),
+        search_funcs = [
+            ("arXiv", self.search_arxiv),
+            ("Crossref", self.search_crossref),
+            ("Semantic Scholar", self.search_semantic_scholar),
+            ("OpenAlex", self.search_openalex),
+            ("PubMed", self.search_pubmed),
+            ("DOAJ", self.search_doaj),
         ]
 
+        sources: List[List[Dict[str, Any]]] = []
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=6)
+        try:
+            future_map = {
+                executor.submit(fn, query, limit_per_source): name
+                for name, fn in search_funcs
+            }
+            done, _ = concurrent.futures.wait(future_map.keys(), timeout=5.0)
+            for fut in done:
+                try:
+                    res = fut.result(timeout=0.1)
+                    if res and isinstance(res, list):
+                        sources.append(res)
+                except Exception:
+                    pass
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+
+        combined = []
+        seen_titles = set()
         for source_list in sources:
             for paper in source_list:
                 clean_title = re.sub(r"[^\w\s]", "", paper["title"].lower()).strip()
@@ -375,8 +398,10 @@ class PaperFetcher:
 
         if pdf_url:
             try:
-                resp = requests.get(pdf_url, headers=self.headers, timeout=20, stream=True)
-                if resp.status_code == 200 and ("pdf" in resp.headers.get("Content-Type", "").lower() or pdf_url.endswith(".pdf")):
+                resp = requests.get(pdf_url, headers=self.headers, timeout=6, stream=True)
+                content_len = int(resp.headers.get("Content-Length", 0))
+                # Skip massive files > 15MB to prevent memory exhaustion
+                if resp.status_code == 200 and content_len <= 15 * 1024 * 1024 and ("pdf" in resp.headers.get("Content-Type", "").lower() or pdf_url.endswith(".pdf")):
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                         tmp.write(resp.content)
                         tmp_path = tmp.name
@@ -385,11 +410,13 @@ class PaperFetcher:
                         reader = PdfReader(tmp_path)
                         pages_text = []
                         for i, page in enumerate(reader.pages):
+                            if i >= 30:  # Max 30 pages per paper
+                                break
                             t = page.extract_text()
                             if t and len(t.strip()) > 50:
                                 pages_text.append(f"--- Page {i+1} ---\n{t.strip()}")
                         if pages_text:
-                            extracted_text = "\n\n".join(pages_text)
+                            extracted_text = "\n\n".join(pages_text)[:40000]
                     finally:
                         if os.path.exists(tmp_path):
                             os.remove(tmp_path)
@@ -406,3 +433,4 @@ class PaperFetcher:
             )
 
         return extracted_text
+

@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
@@ -9,6 +10,17 @@ router = APIRouter(tags=["Research Gap Analyzer"])
 
 fetcher = PaperFetcher()
 analyzer_engine = GapAnalyzerEngine()
+
+
+def _process_ingest_sync(fetched_papers: List[Dict[str, Any]]) -> tuple[int, int]:
+    selected_papers = fetched_papers[:5]
+    fetched_with_text = []
+    for paper in selected_papers:
+        full_text = fetcher.download_and_extract_text(paper)
+        fetched_with_text.append((paper, full_text))
+
+    num_chunks = analyzer_engine.process_and_index_papers(fetched_papers_with_text=fetched_with_text)
+    return len(selected_papers), num_chunks
 
 
 class PaperSearchRequest(BaseModel):
@@ -39,7 +51,9 @@ async def search_papers(req: PaperSearchRequest):
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
     try:
-        papers = fetcher.search_all(query=req.query, limit_per_source=req.limit_per_source or 3)
+        papers = await asyncio.to_thread(
+            fetcher.search_all, query=req.query, limit_per_source=req.limit_per_source or 3
+        )
         return {"query": req.query, "total_found": len(papers), "papers": papers}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch papers: {str(e)}")
@@ -50,16 +64,10 @@ async def ingest_papers(
     req: IngestPapersRequest
 ):
     try:
-        selected_papers = req.fetched_papers[:5]
-        fetched_with_text = []
-        for paper in selected_papers:
-            full_text = fetcher.download_and_extract_text(paper)
-            fetched_with_text.append((paper, full_text))
-
-        num_chunks = analyzer_engine.process_and_index_papers(fetched_papers_with_text=fetched_with_text)
+        count, num_chunks = await asyncio.to_thread(_process_ingest_sync, req.fetched_papers)
         return {
             "status": "success",
-            "indexed_papers_count": len(selected_papers),
+            "indexed_papers_count": count,
             "chunks_created": num_chunks,
         }
     except Exception as e:
@@ -71,7 +79,8 @@ async def analyze_research_gaps(req: AnalyzeGapsRequest):
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="Topic cannot be empty.")
     try:
-        report = analyzer_engine.generate_gap_report(
+        report = await asyncio.to_thread(
+            analyzer_engine.generate_gap_report,
             topic=req.topic,
             provider=req.provider or "gemini",
             model_name=req.model_name or "gemini-3.6-flash",
@@ -91,7 +100,8 @@ async def chat_followup(req: ChatFollowupRequest):
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
     try:
-        answer = analyzer_engine.ask_followup(
+        answer = await asyncio.to_thread(
+            analyzer_engine.ask_followup,
             question=req.question,
             provider=req.provider or "gemini",
             model_name=req.model_name or "gemini-3.6-flash",
@@ -104,3 +114,4 @@ async def chat_followup(req: ChatFollowupRequest):
             "Please try asking your question again in a few moments."
         )
         return {"question": req.question, "answer": fallback_msg}
+
