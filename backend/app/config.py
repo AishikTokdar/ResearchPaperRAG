@@ -1,11 +1,12 @@
+import json
 import os
 import re
 from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import AliasChoices, Field, computed_field
-from pydantic_settings import BaseSettings
+from pydantic import AliasChoices, Field, computed_field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
@@ -38,6 +39,9 @@ class AIProvider:
         models: list[str],
         embedding_model: str | None = None,
         is_openai_compatible: bool = True,
+        access_tier: str = "free",
+        model_names: dict[str, str] | None = None,
+        preview_models: set[str] | None = None,
     ):
         self.name = name
         self.base_url = base_url
@@ -45,6 +49,9 @@ class AIProvider:
         self.models = models
         self.embedding_model = embedding_model
         self.is_openai_compatible = is_openai_compatible
+        self.access_tier = access_tier
+        self.model_names = model_names or {}
+        self.preview_models = preview_models or set()
         self._api_key: str | None = None
 
     @property
@@ -62,96 +69,18 @@ class AIProvider:
         return bool(self.api_key)
 
 
+MODEL_CATALOG = json.loads(Path(__file__).with_name("model_catalog.json").read_text(encoding="utf-8"))
+DEFAULT_MODEL: str = MODEL_CATALOG["default_model"]
+DEFAULT_PROVIDER: str = MODEL_CATALOG["default_provider"]
 AI_PROVIDERS: dict[str, AIProvider] = {
-    "gemini": AIProvider(
-        name="gemini",
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        api_key_env="GOOGLE_API_KEY",
-        models=[
-            "gemini-3.6-flash",
-            "gemini-3.5-flash",
-            "gemini-3.5-flash-lite",
-            "gemini-3.1-flash-lite",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.5-pro",
-            "gemini-flash-latest",
-        ],
-        embedding_model="gemini-embedding-001",
-    ),
-    "groq": AIProvider(
-        name="groq",
-        base_url="https://api.groq.com/openai/v1",
-        api_key_env="GROQ_API_KEY",
-        models=[
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "qwen/qwen3.6-27b",
-            "mixtral-8x7b-32768",
-            "deepseek-r1-distill-llama-70b",
-            "openai/gpt-oss-120b",
-            "openai/gpt-oss-20b",
-            "openai/gpt-oss-safeguard-20b",
-        ],
-        embedding_model=None,
-    ),
-    "cerebras": AIProvider(
-        name="cerebras",
-        base_url="https://api.cerebras.ai/v1",
-        api_key_env="CEREBRAS_API_KEY",
-        models=[
-            "gpt-oss-120b",
-            "gemma-4-31b",
-            "qwen-3-32b",
-        ],
-        embedding_model=None,
-    ),
-    "sambanova": AIProvider(
-        name="sambanova",
-        base_url="https://api.sambanova.ai/v1",
-        api_key_env="SAMBANOVA_API_KEY",
-        models=[
-            "DeepSeek-V3-0324",
-            "DeepSeek-R1",
-            "Llama-4-Maverick-17B-128E-Instruct",
-            "Llama-4-Scout-17B-16E-Instruct",
-            "Meta-Llama-3.3-70B-Instruct",
-            "DeepSeek-R1-Distill-Llama-70B",
-        ],
-        embedding_model=None,
-    ),
-    "huggingface": AIProvider(
-        name="huggingface",
-        base_url="https://router.huggingface.co/v1",
-        api_key_env="HF_API_KEY",
-        models=[
-            "google/gemma-4-31b-it",
-            "openai/gpt-oss-120b",
-            "Qwen/Qwen3.5-27B",
-            "meta-llama/Meta-Llama-3-8B-Instruct",
-        ],
-        embedding_model="sentence-transformers/all-MiniLM-L6-v2",
-    ),
-    "openrouter": AIProvider(
-        name="openrouter",
-        base_url="https://openrouter.ai/api/v1",
-        api_key_env="OPENROUTER_API_KEY",
-        models=[
-            "openrouter/free",
-            "openai/gpt-oss-120b:free",
-            "openai/gpt-oss-20b:free",
-            "google/gemini-3.1-flash-lite:free",
-            "qwen/qwen3.5-27b:free",
-            "z-ai/glm-4.7:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-        ],
-        embedding_model=None,
-    ),
+    item["name"]: AIProvider(
+        name=item["name"], base_url=item["base_url"], api_key_env=item["api_key_env"],
+        models=[m["id"] for m in item["models"]], embedding_model=item["embedding_model"],
+        access_tier=item["access_tier"], model_names={m["id"]: m["name"] for m in item["models"]},
+        preview_models={m["id"] for m in item["models"] if m["preview"]},
+    ) for item in MODEL_CATALOG["providers"]
 }
-
-PROVIDER_PRIORITY: list[str] = [
-    "gemini", "cerebras", "sambanova", "groq", "huggingface", "openrouter",
-]
+PROVIDER_PRIORITY: list[str] = [item["name"] for item in MODEL_CATALOG["providers"]]
 
 
 class Settings(BaseSettings):
@@ -179,15 +108,34 @@ class Settings(BaseSettings):
     openai_direct_api_key: str | None = None
 
     embedding_openai_direct: bool = Field(default=False)
+    embedding_use_remote: bool = False
 
-    default_model: str = "gemini-3.6-flash"
-    default_provider: str = "gemini"
+    default_model: str = DEFAULT_MODEL
+    default_provider: str = DEFAULT_PROVIDER
+    allow_credit_providers: bool = False
     temperature: float = 0.0
     max_tokens: int = 2048
 
+    embedding_chunk_tokens: int = Field(default=224, ge=32, le=254)
+    embedding_overlap_tokens: int = Field(default=32, ge=0, le=64)
     chunk_size: int = 1000
     chunk_overlap: int = 200
     retrieval_k: int = 4
+    context_token_budget: int = Field(default=4000, ge=512, le=16000)
+    report_max_tokens: int = Field(default=3500, ge=512, le=8192)
+    followup_max_tokens: int = Field(default=800, ge=128, le=4096)
+    llm_max_attempts: int = Field(default=3, ge=1, le=6)
+    llm_timeout_seconds: float = Field(default=30, ge=1, le=120)
+    llm_request_deadline_seconds: float = Field(default=60, ge=1, le=180)
+    max_concurrent_requests: int = Field(default=4, ge=1, le=32)
+    max_pdf_pages: int = Field(default=200, ge=1, le=1000)
+    pdf_memory_limit_mb: int = Field(default=512, ge=128, le=4096)
+    max_extracted_chars: int = Field(default=500000, ge=1000, le=2000000)
+    max_document_chunks: int = Field(default=1000, ge=10, le=5000)
+    # Comma-separated IPs/CIDRs of reverse proxies allowed to supply X-Real-IP.
+    trusted_proxy_ips: str = ""
+    allowed_hosts: str = "localhost,127.0.0.1,[::1],testserver"
+    telemetry_tunnel_dsn: str | None = None
 
     faiss_persist_dir: str = "faiss_index"
     max_vector_sessions: int = Field(default=64, ge=4, le=10_000)
@@ -214,10 +162,15 @@ class Settings(BaseSettings):
     # File upload settings
     max_file_size: int = 50 * 1024 * 1024  # 50MB
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def migrate_retired_default(self) -> "Settings":
+        provider = AI_PROVIDERS.get(self.default_provider)
+        if provider is not None and self.default_model not in provider.models:
+            self.default_model = provider.models[0]
+        return self
+
 
 
 @lru_cache
@@ -231,7 +184,7 @@ def get_all_provider_api_keys(provider_name: str, custom_key: str | None = None)
     Extract all API keys for any given provider from:
     1. Custom passed API key (single string or comma/semicolon/space-separated list)
     2. Settings & Environment variables for that provider (single or comma-separated)
-    
+
     Supports env variables:
     - gemini: GOOGLE_API_KEY, GOOGLE_API_KEYS, GEMINI_API_KEY, GEMINI_API_KEYS
     - groq: GROQ_API_KEY, GROQ_API_KEYS
@@ -240,7 +193,7 @@ def get_all_provider_api_keys(provider_name: str, custom_key: str | None = None)
     - huggingface: HF_API_KEY, HF_API_KEYS, HUGGINGFACE_API_KEY
     - openrouter: OPENROUTER_API_KEY, OPENROUTER_API_KEYS, OPENAI_API_KEY
     - openai: OPENAI_DIRECT_API_KEY, OPENAI_API_KEY
-    
+
     Returns a list of unique non-empty key strings.
     """
     settings = get_settings()
@@ -250,7 +203,7 @@ def get_all_provider_api_keys(provider_name: str, custom_key: str | None = None)
     def add_key_str(raw: str | None):
         if not raw:
             return
-        for part in re.split(r'[,;\s]+', raw):
+        for part in re.split(r"[,;\s]+", raw):
             k = part.strip()
             if k and k not in seen:
                 seen.add(k)
@@ -302,17 +255,19 @@ def get_all_groq_api_keys(custom_key: str | None = None) -> list[str]:
     return get_all_provider_api_keys("groq", custom_key)
 
 
+def provider_is_allowed(provider: AIProvider) -> bool:
+    """Credit/trial providers require an explicit server-side opt-in."""
+    return provider.access_tier == "free" or get_settings().allow_credit_providers
+
+
 def provider_has_credentials(provider: AIProvider) -> bool:
     """True if LLM calls can authenticate (env + pydantic Settings + multi-keys)."""
-    return bool(get_all_provider_api_keys(provider.name, provider.api_key))
+    return provider_is_allowed(provider) and bool(get_all_provider_api_keys(provider.name, provider.api_key))
 
 
 def get_available_providers() -> list[str]:
     """Get list of providers with valid API keys."""
-    return [
-        name for name, provider in AI_PROVIDERS.items()
-        if provider_has_credentials(provider)
-    ]
+    return [name for name, provider in AI_PROVIDERS.items() if provider_has_credentials(provider)]
 
 
 def get_provider(name: str) -> AIProvider | None:
@@ -375,7 +330,7 @@ def get_embedding_fallback_chain() -> list[tuple[AIProvider, str]]:
         return provider.is_enabled
 
     def append_provider(provider: AIProvider | None) -> None:
-        if provider is None or not has_embedding_key(provider):
+        if provider is None or not provider_is_allowed(provider) or not has_embedding_key(provider):
             return
         model = provider.embedding_model
         if not model:
@@ -393,7 +348,7 @@ def get_embedding_fallback_chain() -> list[tuple[AIProvider, str]]:
 
     gem = AI_PROVIDERS.get("gemini")
     if gem and has_embedding_key(gem):
-        m2 = "gemini-embedding-2-preview"
+        m2 = "gemini-embedding-2"
         sig = (gem.base_url, m2)
         if sig not in seen:
             seen.add(sig)
