@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from threading import Lock
-from typing import Dict, List, Set
 
 logger = logging.getLogger(__name__)
 
@@ -10,8 +9,8 @@ MAX_CONSECUTIVE_FAILURES = 3
 INVALID_KEY_THRESHOLD = 2
 
 _LOCK = Lock()
-_MODEL_FAILURES: Dict[str, int] = {}
-_INVALID_KEY_FAILURES: Dict[str, int] = {}
+_MODEL_FAILURES: dict[str, int] = {}
+_INVALID_KEY_FAILURES: dict[str, int] = {}
 
 
 def is_auth_or_invalid_key_error(exc: Exception) -> bool:
@@ -76,7 +75,7 @@ def is_provider_invalid_key(provider_name: str) -> bool:
     return get_invalid_key_failure_count(provider_name) > INVALID_KEY_THRESHOLD
 
 
-def get_provider_status(provider_name: str, has_credentials: bool, models: List[str]) -> str:
+def get_provider_status(provider_name: str, has_credentials: bool, models: list[str]) -> str:
     if not has_credentials:
         return "api_key_not_set"
 
@@ -96,7 +95,7 @@ def get_provider_status(provider_name: str, has_credentials: bool, models: List[
     return "unavailable"
 
 
-def get_all_model_failures() -> Dict[str, int]:
+def get_all_model_failures() -> dict[str, int]:
     with _LOCK:
         return dict(_MODEL_FAILURES)
 
