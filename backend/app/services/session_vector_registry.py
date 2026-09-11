@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import re
-import shutil
 import threading
 from collections import OrderedDict
 
@@ -38,7 +37,8 @@ class SessionVectorRegistry:
     In-process registry: maps browser ``session_id`` -> ``VectorStoreService``.
 
     ``OrderedDict`` + ``move_to_end`` implements LRU: when at capacity, the
-    least-recently-used session is popped, cleared, and its folder removed from disk.
+    least-recently-used session is dropped from the registry and idle disk state is removed.
+    In-flight readers retain their immutable index reference.
     """
 
     def __init__(self, max_sessions: int) -> None:
@@ -56,16 +56,25 @@ class SessionVectorRegistry:
                 self._stores.move_to_end(sid)
                 return self._stores[sid]
 
-            while len(self._stores) >= self._max:
-                evicted_sid, evicted_svc = self._stores.popitem(last=False)
-                evicted_svc.clear()
-                path = VectorStoreService.disk_path_for_session(evicted_sid)
-                try:
-                    shutil.rmtree(path, ignore_errors=True)
-                except OSError as exc:
-                    logger.warning("Could not remove session index %s: %s", path, exc)
-                logger.info("Evicted LRU vector session %s", evicted_sid)
-
             svc = VectorStoreService(session_id=sid)
-            self._stores[sid] = svc
+            # Read-only probes and rejected questions must not evict real documents.
+            if svc.is_ready:
+                self._remember(svc)
             return svc
+
+    def _remember(self, service: VectorStoreService) -> None:
+        while len(self._stores) >= self._max:
+            evicted_sid, evicted_svc = self._stores.popitem(last=False)
+            evicted_svc.discard_persisted_index_if_idle()
+            logger.info("Evicted LRU vector session %s", evicted_sid)
+        self._stores[service.session_id] = service
+
+    def activate(self, service: VectorStoreService) -> VectorStoreService:
+        """Register only a validated upload, and serialize same-session index writes."""
+        with self._lock:
+            existing = self._stores.get(service.session_id)
+            if existing is not None:
+                self._stores.move_to_end(service.session_id)
+                return existing
+            self._remember(service)
+            return service
