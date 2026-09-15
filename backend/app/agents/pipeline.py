@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..config import get_settings
 from ..services.llm_service import LLMService
 from ..services.vector_store import VectorStoreService
 from .analyzer import AnalyzerAgent
@@ -27,6 +28,7 @@ class PipelineResult:
         context: Final pipeline context with all metadata
         sources: Page-level source references (when requested)
     """
+
     success: bool
     answer: str | None = None
     model_used: str | None = None
@@ -59,13 +61,13 @@ class AgentPipeline:
         self,
         vector_service: VectorStoreService,
         llm_service: LLMService,
-        retrieval_k: int = 4,
+        retrieval_k: int | None = None,
     ):
         self.vector_service = vector_service
         self.llm_service = llm_service
-        self.retrieval_k = retrieval_k
+        self.retrieval_k = retrieval_k or get_settings().retrieval_k
 
-        self.extractor = ExtractorAgent(vector_service, k=retrieval_k)
+        self.extractor = ExtractorAgent(vector_service, k=self.retrieval_k)
         self.analyzer = AnalyzerAgent()
         self.preprocessor = PreprocessorAgent()
         self.optimizer = OptimizerAgent()
@@ -106,6 +108,7 @@ class AgentPipeline:
         question: str,
         model: str | None = None,
         include_sources: bool = False,
+        hybrid_mode: bool = False,
     ) -> PipelineResult:
         """
         Execute the full 7-step pipeline for a user question.
@@ -122,6 +125,7 @@ class AgentPipeline:
             "question": question,
             "model": model,
             "include_sources": include_sources,
+            "hybrid_mode": hybrid_mode,
             "retrieval_k": self.retrieval_k,
         }
         results: list[AgentResult] = []

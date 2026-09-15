@@ -3,8 +3,7 @@ Preprocessor Agent
 
 Cleans and formats retrieved document chunks before they are sent
 to the Optimizer/Synthesizer.  Strips whitespace noise, normalizes
-unicode, collapses redundant newlines, and trims excessively long
-chunks so downstream agents receive consistent, well-formed text.
+unicode, and collapses redundant newlines while preserving complete passages.
 """
 
 import re
@@ -23,17 +22,8 @@ class PreprocessorAgent(BaseAgent):
     Pipeline position: runs *after* AnalyzerAgent and *before* OptimizerAgent.
     """
 
-    def __init__(self, max_chunk_chars: int = 1500):
-        """
-        Args:
-            max_chunk_chars: Hard cap per chunk – anything longer is truncated
-                             so the LLM context window is used efficiently.
-        """
-        super().__init__(
-            name="preprocessor",
-            description="Cleans, normalizes, and trims document chunks"
-        )
-        self.max_chunk_chars = max_chunk_chars
+    def __init__(self):
+        super().__init__(name="preprocessor", description="Cleans and normalizes document chunks")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -52,27 +42,23 @@ class PreprocessorAgent(BaseAgent):
         """NFC-normalize and replace common special-quote chars."""
         text = unicodedata.normalize("NFC", text)
         replacements = {
-            "\u2018": "'", "\u2019": "'",
-            "\u201c": '"', "\u201d": '"',
-            "\u2013": "-", "\u2014": "-",
+            "\u2018": "'",
+            "\u2019": "'",
+            "\u201c": '"',
+            "\u201d": '"',
+            "\u2013": "-",
+            "\u2014": "-",
             "\u2026": "...",
         }
         for old, new in replacements.items():
             text = text.replace(old, new)
         return text
 
-    def _truncate(self, text: str) -> str:
-        if len(text) <= self.max_chunk_chars:
-            return text
-        return text[: self.max_chunk_chars].rsplit(" ", 1)[0] + " ..."
-
     # ------------------------------------------------------------------
     # Pipeline interface
     # ------------------------------------------------------------------
 
-    def process(
-        self, input_data: list[Document], context: dict[str, Any]
-    ) -> list[Document]:
+    def process(self, input_data: list[Document], context: dict[str, Any]) -> list[Document]:
         """
         Clean every chunk and return the processed list.
 
@@ -93,12 +79,9 @@ class PreprocessorAgent(BaseAgent):
 
             text = self._normalize_unicode(raw)
             text = self._normalize_whitespace(text)
-            text = self._truncate(text)
             chars_after += len(text)
 
-            cleaned.append(
-                Document(page_content=text, metadata={**doc.metadata})
-            )
+            cleaned.append(Document(page_content=text, metadata={**doc.metadata}))
 
         context["preprocessor_chars_before"] = chars_before
         context["preprocessor_chars_after"] = chars_after

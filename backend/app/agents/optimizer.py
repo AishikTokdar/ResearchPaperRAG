@@ -2,10 +2,9 @@ from typing import Any
 
 from langchain_core.documents import Document
 
+from ..config import get_settings
+from ..services.evidence import fit_evidence, rank_evidence
 from .base_agent import BaseAgent
-
-_CHARS_PER_TOKEN = 4
-_DEFAULT_CONTEXT_TOKEN_BUDGET = 6000
 
 
 class OptimizerAgent(BaseAgent):
@@ -18,32 +17,11 @@ class OptimizerAgent(BaseAgent):
     Output: ``Tuple[str, List[Document]]`` – (question, optimised_chunks).
     """
 
-    def __init__(self, context_token_budget: int = _DEFAULT_CONTEXT_TOKEN_BUDGET):
+    def __init__(self, context_token_budget: int | None = None):
         super().__init__(
-            name="optimizer",
-            description="Reorders and trims context for optimal LLM prompting"
+            name="optimizer", description="Reorders and trims context for optimal LLM prompting"
         )
-        self.context_char_budget = context_token_budget * _CHARS_PER_TOKEN
-
-    @staticmethod
-    def _relevance_score(doc: Document) -> float:
-        """Higher is better.  Prefer chunks earlier in the document and
-        chunks that are longer (more likely to contain full paragraphs)."""
-        page = doc.metadata.get("page", 999)
-        length_bonus = min(len(doc.page_content) / 1000.0, 1.0)
-        return length_bonus - (page * 0.001)
-
-    def _fit_budget(self, docs: list[Document]) -> list[Document]:
-        """Drop trailing chunks once the char budget is exceeded."""
-        budget_left = self.context_char_budget
-        kept: list[Document] = []
-        for doc in docs:
-            cost = len(doc.page_content)
-            if cost > budget_left:
-                break
-            kept.append(doc)
-            budget_left -= cost
-        return kept
+        self.context_token_budget = context_token_budget or get_settings().context_token_budget
 
     def process(
         self,
@@ -62,12 +40,14 @@ class OptimizerAgent(BaseAgent):
         """
         question, chunks = input_data
 
-        ranked = sorted(chunks, key=self._relevance_score, reverse=True)
-        fitted = self._fit_budget(ranked)
+        ranked = rank_evidence(question, chunks)
+        fitted = fit_evidence(ranked, self.context_token_budget)[
+            : context.get("retrieval_k", get_settings().retrieval_k)
+        ]
 
         context["optimizer_input_chunks"] = len(chunks)
         context["optimizer_output_chunks"] = len(fitted)
-        context["optimizer_char_budget"] = self.context_char_budget
+        context["optimizer_token_budget"] = self.context_token_budget
         # Keep optimized chunks for downstream source-citation refinement.
         context["optimized_chunks"] = fitted
 
