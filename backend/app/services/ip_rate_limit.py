@@ -13,6 +13,7 @@ compared to the configured max — classic sliding window counter.
 
 from __future__ import annotations
 
+import ipaddress
 import threading
 import time
 from collections import deque
@@ -28,20 +29,23 @@ _ask_hits: dict[str, deque[float]] = {}
 
 
 def client_ip(request: Request) -> str:
-    """Best-effort client IP; prefer proxy headers when present."""
+    """Honor X-Real-IP only when the immediate peer is a configured proxy."""
+    peer = request.client.host if request.client else "unknown"
+    try:
+        trusted = any(
+            ipaddress.ip_address(peer) in ipaddress.ip_network(cidr.strip(), strict=False)
+            for cidr in get_settings().trusted_proxy_ips.split(",")
+            if cidr.strip()
+        )
+    except ValueError:
+        trusted = False
     x_real = request.headers.get("x-real-ip")
-    if x_real:
-        part = x_real.strip().split(",")[0].strip()
-        if part:
-            return part
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        part = xff.split(",")[0].strip()
-        if part:
-            return part
-    if request.client:
-        return request.client.host
-    return "unknown"
+    if trusted and x_real:
+        try:
+            return str(ipaddress.ip_address(x_real.strip()))
+        except ValueError:
+            pass
+    return peer
 
 
 def _prune_and_allow(
@@ -53,6 +57,12 @@ def _prune_and_allow(
     now = time.monotonic()
     cutoff = now - window_seconds
     with _lock:
+        # Bound memory even when many distinct clients hit the service once.
+        if len(store) >= 10000:
+            for stale_key in [k for k, hits in store.items() if not hits or hits[-1] < cutoff]:
+                del store[stale_key]
+            if key not in store and len(store) >= 10000:
+                return False
         q = store.get(key)
         if q is None:
             q = deque()
