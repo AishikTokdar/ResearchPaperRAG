@@ -11,6 +11,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from ..agents.base_agent import AgentResult
 from ..agents.pipeline import AgentPipeline
@@ -46,7 +47,7 @@ def set_llm_service(llm_service: LLMService):
 @router.post("/ask", response_model=AnswerResponse)
 async def ask_question(
     request: QuestionRequest,
-    _: None = Depends(check_ask_rate_limit),  # underscore = "fire-and-forget" dependency side effect only
+    _: None = Depends(check_ask_rate_limit),
     vector_service: VectorStoreService = Depends(get_vector_service),
     llm_service: LLMService = Depends(get_llm_service),
 ):
@@ -70,16 +71,18 @@ async def ask_question(
 
     try:
         pipeline = AgentPipeline(vector_service, llm_service)
-        result = pipeline.run(
+        result = await run_in_threadpool(
+            pipeline.run,
             question=request.question,
             model=request.model,
             include_sources=request.include_sources,
+            hybrid_mode=request.hybrid_mode,
         )
 
         if not result.success:
             raise HTTPException(
                 status_code=500,
-                detail=result.error or "Failed to generate answer",
+                detail="Failed to generate answer. Please try again shortly.",
             )
 
         increment_chat_completions()
@@ -89,6 +92,7 @@ async def ask_question(
             model_used=result.model_used,
             processing_time=result.processing_time,
             sources=result.sources,
+            warnings=result.context.get("warnings"),
         )
 
     except HTTPException:
@@ -97,13 +101,14 @@ async def ask_question(
         logger.exception("Error processing question")
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing question: {str(e)}",
+            detail="Unable to process the question. Please try again shortly.",
         ) from e
 
 
 # ---------------------------------------------------------------------------
 # SSE Streaming endpoint
 # ---------------------------------------------------------------------------
+
 
 async def _stream_pipeline(
     question: str,
@@ -135,35 +140,39 @@ async def _stream_pipeline(
         total_ms = 0.0
 
         # 1) Extractor
-        ok, chunks, ms, err = pipeline._step(pipeline.extractor, question, context, results)
+        ok, chunks, ms, err = await run_in_threadpool(
+            pipeline._step, pipeline.extractor, question, context, results
+        )
         total_ms += ms
         if not ok:
-            yield sse("error", {"message": err or "Extractor failed"})
+            yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
         # 2) Analyzer
-        ok, filtered, ms, err = pipeline._step(pipeline.analyzer, chunks, context, results)
+        ok, filtered, ms, err = await run_in_threadpool(
+            pipeline._step, pipeline.analyzer, chunks, context, results
+        )
         total_ms += ms
         if not ok:
-            yield sse("error", {"message": err or "Analyzer failed"})
+            yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
         # 3) Preprocessor
-        ok, cleaned, ms, err = pipeline._step(
-            pipeline.preprocessor, filtered, context, results
+        ok, cleaned, ms, err = await run_in_threadpool(
+            pipeline._step, pipeline.preprocessor, filtered, context, results
         )
         total_ms += ms
         if not ok:
-            yield sse("error", {"message": err or "Preprocessor failed"})
+            yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
         # 4) Optimizer
-        ok, optimised_pair, ms, err = pipeline._step(
-            pipeline.optimizer, (question, cleaned), context, results
+        ok, optimised_pair, ms, err = await run_in_threadpool(
+            pipeline._step, pipeline.optimizer, (question, cleaned), context, results
         )
         total_ms += ms
         if not ok:
-            yield sse("error", {"message": err or "Optimizer failed"})
+            yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
         # 5) Synthesizer (true provider token stream)
@@ -190,8 +199,9 @@ async def _stream_pipeline(
                 yield sse("token", {"content": content})
             elif event.get("type") == "complete":
                 model_used = event.get("model_used")
+                answer = event.get("answer", answer)
                 if event.get("warnings"):
-                    for w in event.get("warnings"):
+                    for w in event.get("warnings") or []:
                         if w not in stream_warnings:
                             stream_warnings.append(w)
 
@@ -199,19 +209,21 @@ async def _stream_pipeline(
         context["answer_length"] = len(answer)
 
         # 6) Validator
-        ok, validated, ms, err = pipeline._step(pipeline.validator, answer, context, results)
-        total_ms += ms
-        if not ok:
-            yield sse("error", {"message": err or "Validator failed"})
-            return
-
-        # 7) Assembler
-        ok, assembled, ms, err = pipeline._step(
-            pipeline.assembler, validated, context, results
+        ok, validated, ms, err = await run_in_threadpool(
+            pipeline._step, pipeline.validator, answer, context, results
         )
         total_ms += ms
         if not ok:
-            yield sse("error", {"message": err or "Assembler failed"})
+            yield sse("error", {"message": "The response could not be completed. Please retry."})
+            return
+
+        # 7) Assembler
+        ok, assembled, ms, err = await run_in_threadpool(
+            pipeline._step, pipeline.assembler, validated, context, results
+        )
+        total_ms += ms
+        if not ok:
+            yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
         increment_chat_completions()
@@ -220,6 +232,7 @@ async def _stream_pipeline(
         yield sse(
             "done",
             {
+                "answer": assembled.get("answer", answer),
                 "model_used": assembled.get("model_used") or context.get("model_used"),
                 "processing_time": round(total_ms / 1000, 3)
                 if total_ms > 0
@@ -229,10 +242,9 @@ async def _stream_pipeline(
             },
         )
 
-
-    except Exception as exc:
+    except Exception:
         logger.exception("Streaming pipeline error")
-        yield sse("error", {"message": str(exc)})
+        yield sse("error", {"message": "The response could not be completed. Please retry."})
 
 
 @router.post("/ask/stream")

@@ -11,6 +11,7 @@ from ..config import (
     get_embedding_fallback_chain,
     get_settings,
     provider_has_credentials,
+    provider_is_allowed,
 )
 from ..models.schemas import RuntimeProviderRow, RuntimeSummaryResponse
 from ..services.model_health import get_provider_status
@@ -32,7 +33,7 @@ _PROVIDER_LABELS: dict[str, str] = {
 @router.get("/runtime-summary", response_model=RuntimeSummaryResponse)
 def runtime_summary() -> RuntimeSummaryResponse:
     settings = get_settings()
-    chain = get_embedding_fallback_chain()
+    chain = get_embedding_fallback_chain() if settings.embedding_use_remote else []
     emb_names = {p.name for p, _ in chain}
     rows: list[RuntimeProviderRow] = []
 
@@ -40,7 +41,11 @@ def runtime_summary() -> RuntimeSummaryResponse:
         has_creds = provider_has_credentials(prov)
         emb = name in emb_names
         models = prov.models or []
-        st = get_provider_status(name, has_creds, models)
+        st = (
+            get_provider_status(name, has_creds, models)
+            if provider_is_allowed(prov)
+            else "disabled"
+        )
         llm_ready = st in ("working", "partial")
 
         rows.append(
@@ -55,7 +60,9 @@ def runtime_summary() -> RuntimeSummaryResponse:
 
     working_n = sum(1 for r in rows if r.status == "working")
     partial_n = sum(1 for r in rows if r.status == "partial")
-    unavail_n = sum(1 for r in rows if r.status in ("unavailable", "api_key_not_set", "invalid_api_key"))
+    unavail_n = sum(
+        1 for r in rows if r.status in ("unavailable", "invalid_api_key")
+    )
     llm_ready_n = sum(1 for r in rows if r.llm_ready)
 
     if llm_ready_n == 0:
@@ -77,6 +84,9 @@ def runtime_summary() -> RuntimeSummaryResponse:
         default_model=settings.default_model,
         providers_detail=rows,
         embedding_chain_steps=len(chain),
+        embedding_chunk_tokens=settings.embedding_chunk_tokens,
+        embedding_overlap_tokens=settings.embedding_overlap_tokens,
+        embedding_mode="remote_with_local_fallback" if settings.embedding_use_remote else "local",
         llm_providers_ready=llm_ready_n,
         rate_limit_upload_per_minute=settings.rate_limit_upload_per_minute,
         rate_limit_ask_per_minute=settings.rate_limit_ask_per_minute,

@@ -27,7 +27,7 @@ async def health_check():
     settings = get_settings()
     return StatusResponse(
         status="healthy",
-        message="All systems operational. The backend API is ready.",
+        message="API process is running. Provider configuration is reported separately at /runtime-summary.",
         model=settings.default_model,
         server_boot_id=SERVER_BOOT_ID,
     )
@@ -51,6 +51,8 @@ async def list_models():
             is_default=m["is_default"],
             is_available=m.get("is_available", True),
             api_key_env=m.get("api_key_env"),
+            access_tier=m.get("access_tier", "free"),
+            is_preview=m.get("is_preview", False),
         )
         for m in models
     ]

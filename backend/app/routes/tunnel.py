@@ -1,69 +1,67 @@
-"""
-Sentry Envelope Tunnel
+"""Optional telemetry relay, restricted to the deployment's single configured DSN."""
 
-Proxies oversight telemetry envelopes through the backend.
-"""
-
+import hmac
+import json
 import logging
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
+
+from ..config import get_settings
+from ..services.ip_rate_limit import check_ask_rate_limit
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["Oversight & Monitoring"])
 
-# Sentry hosts we accept (prevent open-relay abuse)
-_ALLOWED_HOSTS = {"sentry.io", "ingest.sentry.io"}
 
-
-def _is_allowed_host(host: str) -> bool:
-    """Return True if the host ends with an allowed Sentry domain."""
-    for allowed in _ALLOWED_HOSTS:
-        if host == allowed or host.endswith(f".{allowed}"):
-            return True
-    return False
-
-
-@router.post("/api/oversight")
-async def sentry_tunnel(request: Request) -> Response:
-    """
-    Accept a Sentry envelope, extract the real ingest URL from the
-    envelope header's ``dsn`` field, and forward the payload.
-    """
+def _upstream(dsn: str) -> str | None:
     try:
-        body = await request.body()
-        # The first line of a Sentry envelope is a JSON header containing the DSN
-        header_line = body.split(b"\n", 1)[0]
+        parsed = urlsplit(dsn)
+        host = parsed.hostname or ""
+        project = parsed.path.strip("/")
+        if (
+            parsed.scheme != "https"
+            or parsed.port not in (None, 443)
+            or not parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or not host.endswith(".sentry.io")
+            or not project.isdigit()
+        ):
+            return None
+        return f"https://{host}/api/{project}/envelope/"
+    except ValueError:
+        return None
 
-        import json
-        header = json.loads(header_line)
-        dsn = header.get("dsn")
-        if not dsn:
-            return Response(status_code=400, content="Missing DSN in envelope header")
 
-        parsed = urlparse(dsn)
-        if not _is_allowed_host(parsed.hostname or ""):
-            return Response(status_code=403, content="Disallowed Sentry host")
-
-        project_id = parsed.path.strip("/")
-        upstream = f"https://{parsed.hostname}/api/{project_id}/envelope/"
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
+@router.post("/api/oversight", dependencies=[Depends(check_ask_rate_limit)])
+async def sentry_tunnel(request: Request) -> Response:
+    configured = get_settings().telemetry_tunnel_dsn
+    if not configured:
+        return Response(status_code=404)
+    upstream = _upstream(configured)
+    if upstream is None:
+        return Response(status_code=503)
+    body = await request.body()
+    try:
+        header = json.loads(body.split(b"\n", 1)[0])
+        dsn = header.get("dsn") if isinstance(header, dict) else None
+        if not isinstance(dsn, str):
+            return Response(status_code=400)
+        if not hmac.compare_digest(dsn.encode(), configured.encode()):
+            return Response(status_code=403)
+        async with httpx.AsyncClient(trust_env=False) as client:
+            response = await client.post(
                 upstream,
                 content=body,
                 headers={"Content-Type": "application/x-sentry-envelope"},
-                timeout=10.0,
+                timeout=10,
             )
-
-        return Response(
-            status_code=resp.status_code,
-            content=resp.content,
-        )
-
-    except Exception as exc:
-        logger.warning("Sentry tunnel error: %s", exc)
-        # Return 200 so misbehaving clients do not retry storms; Sentry already lost this envelope.
-        return Response(status_code=200, content="ok")
+        return Response(status_code=204 if response.is_success else 502)
+    except (ValueError, UnicodeError):
+        return Response(status_code=400)
+    except httpx.HTTPError:
+        logger.warning("Telemetry relay failed")
+        return Response(status_code=502)

@@ -7,6 +7,7 @@ Endpoints for document upload and processing.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from ..config import get_settings
 from ..models import DocumentFileMeta, StatusResponse, UploadResponse
@@ -37,7 +38,6 @@ def get_vector_registry() -> SessionVectorRegistry:
         settings = get_settings()
         _vector_registry = SessionVectorRegistry(settings.max_vector_sessions)
     return _vector_registry
-
 
 
 def require_session_id(
@@ -97,7 +97,15 @@ async def upload_pdf(
                 detail=f"File '{fname}' is not a valid PDF file",
             )
 
-        data = await file.read()
+        buffer = bytearray()
+        while block := await file.read(65536):
+            buffer.extend(block)
+            if total_bytes + len(buffer) > settings.max_file_size:
+                raise HTTPException(413, "Combined PDF upload size exceeds the limit")
+        await file.close()
+        if not buffer.startswith(b"%PDF-"):
+            raise HTTPException(400, "Uploaded file is not a PDF")
+        data = bytes(buffer)
         if len(data) > settings.max_file_size:
             raise HTTPException(
                 status_code=400,
@@ -118,7 +126,7 @@ async def upload_pdf(
 
     for fname, data in file_contents:
         try:
-            res = pdf_processor.process_uploaded_file(data, fname)
+            res = await run_in_threadpool(pdf_processor.process_uploaded_file, data, fname)
             all_chunks.extend(res.chunks)
             file_metas.append(
                 DocumentFileMeta(
@@ -131,15 +139,30 @@ async def upload_pdf(
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
             err_msg = str(e)
-            if any(k in err_msg for k in ["Stream has ended unexpectedly", "EOF marker not found", "PdfReadError", "is not a valid PDF"]):
-                raise HTTPException(status_code=400, detail=f"Corrupt or invalid PDF file '{fname}': {err_msg}") from e
+            if any(
+                k in err_msg
+                for k in [
+                    "Stream has ended unexpectedly",
+                    "EOF marker not found",
+                    "PdfReadError",
+                    "is not a valid PDF",
+                ]
+            ):
+                raise HTTPException(
+                    status_code=400, detail=f"Corrupt or invalid PDF file '{fname}': {err_msg}"
+                ) from e
             raise HTTPException(
                 status_code=500,
-                detail=f"Error processing '{fname}': {err_msg}",
+                detail="Unable to process the PDF. Please retry.",
             ) from e
 
-
-    vector_service.create_from_documents(all_chunks)
+    if len(all_chunks) > settings.max_document_chunks:
+        raise HTTPException(400, "Documents exceed the indexing limit")
+    vector_service = get_vector_registry().activate(vector_service)
+    try:
+        await run_in_threadpool(vector_service.create_from_documents, all_chunks)
+    except Exception:
+        raise HTTPException(503, "Document indexing is unavailable. Check server storage and retry.") from None
     increment_pdf_uploads()
 
     first_file = file_metas[0].file_name if file_metas else None
@@ -152,7 +175,9 @@ async def upload_pdf(
     )
 
 
-@router.get("/status", response_model=StatusResponse)
+@router.get(
+    "/status", response_model=StatusResponse, dependencies=[Depends(check_upload_rate_limit)]
+)
 async def get_status(
     vector_service: VectorStoreService = Depends(get_vector_service),
 ):
@@ -171,6 +196,6 @@ async def get_status(
         else "No PDF loaded. Please upload a PDF first.",
         pdf_loaded=is_ready,
         model=settings.default_model,
-        documents_loaded=1 if is_ready else 0,
+        documents_loaded=vector_service.document_count,
         server_boot_id=SERVER_BOOT_ID,
     )
