@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 from textwrap import dedent
@@ -22,8 +23,9 @@ if ROOT_DIR not in sys.path:
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI  # noqa: E402 - runtime paths/environment must be configured first
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
 
 try:
     from .config import get_all_provider_api_keys, get_settings
@@ -37,7 +39,7 @@ try:
     )
     from .routes.chat import set_llm_service
     from .routes.upload import set_services as set_upload_services
-    from .services.faiss_session_cleanup import prune_stale_session_indexes, purge_all_session_indexes
+    from .services.faiss_session_cleanup import prune_stale_session_indexes
     from .services.llm_service import LLMService
     from .services.pdf_processor import PDFProcessor
     from .services.session_vector_registry import SessionVectorRegistry
@@ -53,8 +55,7 @@ except (ImportError, ValueError):
     )
     from app.routes.chat import set_llm_service
     from app.routes.upload import set_services as set_upload_services
-
-    from app.services.faiss_session_cleanup import prune_stale_session_indexes, purge_all_session_indexes
+    from app.services.faiss_session_cleanup import prune_stale_session_indexes
     from app.services.llm_service import LLMService
     from app.services.pdf_processor import PDFProcessor
     from app.services.session_vector_registry import SessionVectorRegistry
@@ -79,7 +80,9 @@ def print_startup_api_key_status():
         elif len(keys) == 1:
             print(f"API Key status for {display_name}: CONFIGURED (1 key)")
         else:
-            print(f"API Key status for {display_name}: MULTIPLE KEYS SETUP ({len(keys)} keys configured)")
+            print(
+                f"API Key status for {display_name}: MULTIPLE KEYS SETUP ({len(keys)} keys configured)"
+            )
 
 
 @asynccontextmanager
@@ -89,8 +92,8 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     pdf_processor = PDFProcessor()
 
-    purged = purge_all_session_indexes()
-    print(f"FAISS server restart purge: removed {purged} session directories")
+    pruned = prune_stale_session_indexes()
+    print(f"FAISS startup cleanup: removed {pruned} stale session directories")
 
     print_startup_api_key_status()
 
@@ -114,7 +117,6 @@ async def lifespan(app: FastAPI):
     yield
 
     print("Shutting down...")
-
 
 
 tags_metadata = [
@@ -159,18 +161,21 @@ This service supports multi-document PDF indexing, local zero-key CPU embeddings
 * **Research Gap Analyzer** (`POST /api/papers/search`, `/api/analyze/gaps`): Fetch papers via free academic APIs & run cross-paper RAG gap analysis.
 * **Real-Time Streaming** (`POST /ask/stream`): Server-Sent Events (SSE) token-by-token streaming responses.
 * **JSON Query** (`POST /ask`): Non-streaming JSON answer with source citations.
-* **Multi-Model Support** (`GET /models`): 22+ models across Google Gemini, Groq, Cerebras, SambaNova, Hugging Face, and OpenRouter.
+* **Multi-Model Support** (`GET /models`): Configured catalog models across Google Gemini, Groq, Cerebras, SambaNova, Hugging Face, and OpenRouter.
 * **Knowledge Modes**: `Hybrid Brain` (synthesized world knowledge) vs `Strict to Source` (strict document citations).
 """).strip()
 
 
 def create_app() -> FastAPI:
+    from .services.body_limits import BodyLimitMiddleware
+    from .services.response_headers import ResponseHeadersMiddleware
+
     settings = get_settings()
 
     app = FastAPI(
         title="ResearchPaperRAG Backend API",
         description=API_DESCRIPTION,
-        version="1.0.0",
+        version=settings.app_version,
         openapi_tags=tags_metadata,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -181,13 +186,21 @@ def create_app() -> FastAPI:
     cors_origins = settings.cors_origins
     allow_all = "*" in cors_origins
 
+    app.add_middleware(BodyLimitMiddleware)
+    allowed_hosts = [host.strip() for host in settings.allowed_hosts.split(",") if host.strip()]
+    space_host = os.environ.get("SPACE_HOST", "").strip().lower()
+    if re.fullmatch(r"[a-z0-9][a-z0-9-]*\.hf\.space", space_host):
+        allowed_hosts.append(space_host)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if allow_all else cors_origins,
+        allow_origin_regex=None if allow_all else r"^https://([a-zA-Z0-9_-]+\.)*(pages\.dev|vercel\.app)$",
         allow_credentials=not allow_all,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(ResponseHeadersMiddleware)
 
     app.include_router(health_router)
     app.include_router(runtime_summary_router)
@@ -204,6 +217,8 @@ app = create_app()
 
 if __name__ == "__main__":
     import os
+
     import uvicorn
+
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True)

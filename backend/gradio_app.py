@@ -210,7 +210,38 @@ def upload_pdf_files(
     return success_md, session_id, result_meta
 
 
+def _history_pairs(history: list | None) -> list[tuple[str, str]]:
+    """Accept legacy tuple clients and the current Gradio message format."""
+    pairs: list[tuple[str, str]] = []
+    for item in history or []:
+        if isinstance(item, (tuple, list)) and len(item) == 2:
+            pairs.append((str(item[0]), str(item[1])))
+        elif isinstance(item, dict):
+            content = item.get("content", "")
+            if isinstance(content, list):
+                content = "\n".join(block.get("text", "") for block in content if isinstance(block, dict))
+            if item.get("role") == "user":
+                pairs.append((str(content), ""))
+            elif item.get("role") == "assistant" and pairs:
+                pairs[-1] = (pairs[-1][0], str(content))
+    return pairs
+
+
 async def stream_chat_response(
+    question: str, model: str, knowledge_mode: str, include_sources: bool,
+    history: list, session_id: str | None = None,
+) -> AsyncGenerator[tuple[list, str, str], None]:
+    async for pairs, status, active_session in _stream_chat_response_pairs(
+        question, model, knowledge_mode, include_sources, _history_pairs(history), session_id
+    ):
+        messages = [message for question_text, answer_text in pairs for message in (
+            {"role": "user", "content": question_text},
+            {"role": "assistant", "content": answer_text},
+        )]
+        yield messages, status, active_session
+
+
+async def _stream_chat_response_pairs(
     question: str,
     model: str,
     knowledge_mode: str,
@@ -485,8 +516,8 @@ def create_gradio_app() -> gr.Blocks:
                             "label": "ResearchPaperRAG 7-Agent Pipeline Response",
                         }
                         if "type" in inspect.signature(gr.Chatbot).parameters:
-                            chatbot_options["type"] = "tuples"
-                        chatbot = gr.Chatbot(**chatbot_options)
+                            chatbot_options["type"] = "messages"
+                        chatbot = gr.Chatbot(**chatbot_options, allow_tags=False)
                         status_text = gr.Markdown("*Ready for questions.*")
 
                         with gr.Row():

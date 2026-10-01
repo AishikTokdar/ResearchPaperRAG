@@ -1,0 +1,2 @@
+# Compatibility alias: the default backend profile includes Gradio again.
+-r requirements.txt
