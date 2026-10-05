@@ -88,7 +88,8 @@ class TestChatStreamSSE(unittest.TestCase):
             vector_service = cast(VectorStoreService, object())
             llm_service = cast(LLMService, _FakeLLMService())
             events: list[tuple[str, dict[str, Any]]] = []
-            with patch("app.routes.chat.AgentPipeline", _FakePipeline):
+            with patch("app.routes.chat.AgentPipeline", _FakePipeline), patch("app.routes.chat.increment_chat_completions"):
+                # Unit tests must not mutate deployment counters.
                 async for raw in _stream_pipeline(
                     question="test?",
                     model=None,
