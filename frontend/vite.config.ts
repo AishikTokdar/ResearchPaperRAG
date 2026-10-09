@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Vite — dev proxy target is `VITE_DEV_PROXY_TARGET` (default http://127.0.0.1:8000).
@@ -15,33 +15,29 @@ export default defineConfig(({ mode }) => {
       ? env.VITE_API_BASE_URL.trim()
       : `http://127.0.0.1:${targetPort}`);
 
+  const apiProxy = {
+    "/api/": { target: proxyTarget, changeOrigin: true },
+    "^/(health|status|upload|ask|models|runtime-summary|pipeline-info|docs|redoc|openapi\\.json)(/|$)": { target: proxyTarget, changeOrigin: true },
+  };
 
   return {
     plugins: [react()],
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "./src"),
-        "@/components": path.resolve(__dirname, "./src/components"),
-        "@/hooks": path.resolve(__dirname, "./src/hooks"),
-        "@/lib": path.resolve(__dirname, "./src/lib"),
-        "@/types": path.resolve(__dirname, "./src/types"),
-        "@/context": path.resolve(__dirname, "./src/context"),
-        "@/pages": path.resolve(__dirname, "./src/pages"),
+        "@": fileURLToPath(new URL("./src", import.meta.url)),
+        "@/components": fileURLToPath(new URL("./src/components", import.meta.url)),
+        "@/hooks": fileURLToPath(new URL("./src/hooks", import.meta.url)),
+        "@/lib": fileURLToPath(new URL("./src/lib", import.meta.url)),
+        "@/types": fileURLToPath(new URL("./src/types", import.meta.url)),
+        "@/context": fileURLToPath(new URL("./src/context", import.meta.url)),
+        "@/pages": fileURLToPath(new URL("./src/pages", import.meta.url)),
       },
     },
     server: {
       port: 5173,
-      // Use ``/api/`` (slash after ``api``) so the SPA route ``/api-status`` is not
-      // mistaken for ``/api`` + rewrite → ``/-status`` on the backend.
-      proxy: {
-        "/api/": {
-          target: proxyTarget,
-          changeOrigin: true,
-          rewrite: (p) =>
-            p.startsWith("/api/oversight") ? p : p.replace(/^\/api\//, "/"),
-        },
-      },
+      proxy: apiProxy,
     },
+    preview: { proxy: apiProxy },
     build: {
       outDir: "dist",
       sourcemap: false,
@@ -52,6 +48,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            if (id.includes("react-dom/server") || id.includes("react-dom/cjs/react-dom-server")) return "pdf-renderer";
             if (
               id.includes("react-router-dom") ||
               id.includes("/react/") ||

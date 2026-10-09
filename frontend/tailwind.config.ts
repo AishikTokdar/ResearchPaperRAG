@@ -100,6 +100,11 @@ const config: Config = {
       },
       // Extended colors for glassmorphism
       colors: {
+        indigo: {
+          50: '#f0f5f1', 100: '#dfebe2', 200: '#c2d7c8', 300: '#9cbea7',
+          400: '#75a085', 500: '#4e7b60', 600: '#305d4d', 700: '#244a3c',
+          800: '#203d33', 900: '#1c332b', 950: '#0f211a',
+        },
         glass: {
           light: "rgba(255, 255, 255, 0.1)",
           DEFAULT: "rgba(255, 255, 255, 0.15)",
