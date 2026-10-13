@@ -38,12 +38,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
 
     const applyTheme = (t: Theme) => {
-      let activeDark = true;
-      if (t === "system") {
-        activeDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      } else {
-        activeDark = t === "dark";
-      }
+      const activeDark = t === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        : t === "dark";
 
       setIsDark(activeDark);
 

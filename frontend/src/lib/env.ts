@@ -3,7 +3,7 @@ function trimTrailingSlashes(s: string): string {
 }
 
 export function resolveApiBaseUrl(): string {
-  if (typeof window !== "undefined") {
+  if (import.meta.env.DEV && typeof window !== "undefined") {
     try {
       const search = window.location.search;
       if (search) {
@@ -38,7 +38,8 @@ export function resolveApiBaseUrl(): string {
         return trimTrailingSlashes(storedUrl.trim());
       }
     } catch {
-    }
+        // Keep the default API URL when browser storage is unavailable.
+      }
   }
   const raw = import.meta.env.VITE_API_BASE_URL;
   const trimmed = typeof raw === "string" ? raw.trim() : "";
@@ -46,13 +47,13 @@ export function resolveApiBaseUrl(): string {
   if (trimmed) {
     if (trimmed.startsWith("/")) {
       const rel = trimTrailingSlashes(trimmed) || "/";
-      if (rel !== "/") {
-        return rel;
-      }
+      return rel === "/" ? "" : rel;
     } else {
       return trimTrailingSlashes(trimmed);
     }
   }
+
+  if (!import.meta.env.DEV) return "";
 
   const envProxyTarget = import.meta.env.VITE_DEV_PROXY_TARGET;
   if (typeof envProxyTarget === "string" && envProxyTarget.trim()) {

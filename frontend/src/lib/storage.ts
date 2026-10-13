@@ -24,7 +24,8 @@ export function savePreference<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-  }
+        // Fall back when browser storage is unavailable.
+      }
 }
 
 export const prefKeys = LS_KEYS;
@@ -77,7 +78,8 @@ export async function saveChatSession(
       tx.onerror = () => rej(tx.error);
     });
   } catch {
-  }
+        // Fall back when browser storage is unavailable.
+      }
 }
 
 export async function loadChatSession(

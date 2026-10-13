@@ -1,3 +1,6 @@
+import { DEFAULT_MODEL_ID } from "@/types";
+import { readServerEvents } from "./sse";
+import type { AnalysisProgress } from "./analysis-progress";
 import { API_ENDPOINTS, joinApiUrl } from "./constants";
 import { getChatApiSessionId, isValidChatApiSessionId } from "./chat-session";
 import type {
@@ -56,13 +59,16 @@ async function fetchWithErrorHandling<T>(
   options?: RequestInit,
 ): Promise<T> {
   try {
-    const response = await fetch(url, withSessionHeaders(options));
+    const response = await fetch(url, withSessionHeaders({ ...options, signal: options?.signal ?? AbortSignal.timeout(180000) }));
 
     if (!response.ok) {
       const errorData: APIError = await response.json().catch(() => ({
         detail: `HTTP error ${response.status}`,
       }));
-      throw new ApiError(errorData.detail, response.status, errorData.detail);
+      const detail = typeof errorData.detail === "string" ? errorData.detail
+        : Array.isArray(errorData.detail) ? (errorData.detail as { msg?: string }[]).map(item => item.msg || "Invalid input").join("; ").slice(0, 500)
+        : `HTTP error ${response.status}`;
+      throw new ApiError(detail, response.status, detail);
     }
 
     return await response.json();
@@ -81,6 +87,7 @@ async function fetchWithErrorHandling<T>(
 export interface StreamCallbacks {
   onToken: (text: string) => void;
   onDone: (meta: {
+    answer?: string;
     model_used?: string;
     processing_time?: number;
     sources?: string[];
@@ -113,45 +120,13 @@ export function streamQuestion(
         return;
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        let eventName = "";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            eventName = line.slice(7).trim();
-          } else if (line.startsWith("data: ")) {
-            const raw = line.slice(6);
-            try {
-              const data = JSON.parse(raw);
-              switch (eventName) {
-                case "token":
-                  callbacks.onToken(data.content ?? "");
-                  break;
-                case "done":
-                  callbacks.onDone(data);
-                  break;
-                case "error":
-                  callbacks.onError(data.message ?? "Unknown error");
-                  break;
-                case "status":
-                  callbacks.onStatus?.(data.stage, data.message);
-                  break;
-              }
-            } catch {
-            }
-          }
-        }
+      for await (const { event, data } of readServerEvents(response.body)) {
+        if (event === "token") callbacks.onToken(data.content ?? "");
+        if (event === "status") callbacks.onStatus?.(data.stage, data.message);
+        if (event === "done") { callbacks.onDone(data); return; }
+        if (event === "error") { callbacks.onError(data.message ?? "Unknown error"); return; }
       }
+      callbacks.onError("The response stream was interrupted. Please retry.");
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         callbacks.onError((err as Error).message ?? "Stream failed");
@@ -163,6 +138,33 @@ export function streamQuestion(
 }
 
 export const api = {
+  async runAnalysis(
+    input: { topic: string; provider: string; model: string; paperIds: string[]; files: File[] },
+    onProgress: (progress: Partial<AnalysisProgress>) => void,
+    signal: AbortSignal,
+  ): Promise<{ report: string; progress: Partial<AnalysisProgress> }> {
+    const form = new FormData();
+    form.set("topic", input.topic);
+    form.set("provider", input.provider);
+    form.set("model_name", input.model);
+    form.set("paper_ids", JSON.stringify(input.paperIds));
+    input.files.forEach((file) => form.append("files", file));
+    const response = await fetch(joinApiUrl("/api/analyze/stream"), withSessionHeaders({ method: "POST", body: form, signal }));
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new ApiError(typeof error.detail === "string" ? error.detail : "Unable to start analysis. Check your sources and retry.", response.status);
+    }
+    if (!response.body) throw new Error("The server did not provide a progress stream.");
+    for await (const { event, data } of readServerEvents(response.body)) {
+      if (event === "progress" || event === "heartbeat") onProgress(data);
+      if (event === "error") throw new Error(data.message || "Analysis failed. Please retry.");
+      if (event === "done") {
+        if (typeof data.report !== "string" || !data.report.trim()) throw new Error("The analysis finished without a report.");
+        return { report: data.report, progress: data };
+      }
+    }
+    throw new Error("The analysis connection was interrupted. Please retry.");
+  },
   async checkHealth(): Promise<StatusResponse> {
     return fetchWithErrorHandling<StatusResponse>(
       joinApiUrl(API_ENDPOINTS.HEALTH),
@@ -198,7 +200,7 @@ export const api = {
     question: string,
     model?: string,
     includeSources: boolean = true,
-    hybridMode: boolean = true,
+    hybridMode: boolean = false,
   ): Promise<AskQuestionResponse> {
     const requestBody: AskQuestionRequest = {
       question,
@@ -235,7 +237,7 @@ export const api = {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fetched_papers: fetchedPapers }),
+        body: JSON.stringify({ fetched_papers: fetchedPapers.map(({ id }) => ({ id })) }),
       },
     );
   },
@@ -243,7 +245,7 @@ export const api = {
   async analyzeGaps(
     topic: string,
     provider: string = "gemini",
-    modelName: string = "gemini-3.6-flash",
+    modelName: string = DEFAULT_MODEL_ID,
     apiKey?: string,
   ): Promise<AnalyzeGapsResponse> {
     return fetchWithErrorHandling<AnalyzeGapsResponse>(
@@ -261,10 +263,14 @@ export const api = {
     );
   },
 
+  async clearFollowup(): Promise<void> {
+    await fetchWithErrorHandling(joinApiUrl(API_ENDPOINTS.CHAT_FOLLOWUP), { method: "DELETE" });
+  },
+
   async chatFollowup(
     question: string,
     provider: string = "gemini",
-    modelName: string = "gemini-3.6-flash",
+    modelName: string = DEFAULT_MODEL_ID,
     apiKey?: string,
   ): Promise<ChatFollowupResponse> {
     return fetchWithErrorHandling<ChatFollowupResponse>(

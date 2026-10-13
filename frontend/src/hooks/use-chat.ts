@@ -47,7 +47,7 @@ export function useChat(): UseChatReturn {
   const streamGenerationRef = React.useRef(0);
 
   const sendMessage = React.useCallback(
-    async (message: string, model?: string, includeSources?: boolean, hybridMode: boolean = true) => {
+    async (message: string, model?: string, includeSources?: boolean, hybridMode: boolean = false) => {
       setState((prev) => ({ ...prev, isLoading: true, error: null, statusMessage: null }));
 
       try {
@@ -80,7 +80,7 @@ export function useChat(): UseChatReturn {
   );
 
   const sendMessageStreaming = React.useCallback(
-    (message: string, model?: string, includeSources?: boolean, hybridMode: boolean = true) => {
+    (message: string, model?: string, includeSources?: boolean, hybridMode: boolean = false) => {
       abortRef.current?.abort();
       const streamId = ++streamGenerationRef.current;
 
@@ -108,6 +108,7 @@ export function useChat(): UseChatReturn {
             setState((prev) => ({ ...prev, streamingAnswer: accumulated, statusMessage: null }));
           },
           onDone(meta) {
+            accumulated = meta.answer ?? accumulated;
             if (streamId !== streamGenerationRef.current) return;
             const entry = createChatEntry({
               question: questionRef,

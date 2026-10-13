@@ -1,7 +1,7 @@
 export { API_BASE_URL, joinApiUrl } from "./env";
 
 export const API_ENDPOINTS = {
-  HEALTH: "/",
+  HEALTH: "/health",
   STATUS: "/status",
   UPLOAD: "/upload",
   ASK: "/ask",
@@ -53,7 +53,7 @@ export const SUPPORTED_FILE_TYPES = {
 
 export const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/chat", label: "Start Chat" },
+  { href: "/chat", label: "Workspace" },
 ] as const;
 
 export const SOCIAL_LINKS = {
@@ -71,7 +71,7 @@ export const FEATURES = [
   {
     title: "Strict 3-Year Publication Window",
     description:
-      "Automatically filters search results to recent publications from the last 3 years (2024–2026) for cutting-edge literature discovery.",
+      "Automatically filters search results to recent publications from the current and previous two calendar years for cutting-edge literature discovery.",
   },
   {
     title: "Max 5-Paper Deep Synthesis",
@@ -94,12 +94,12 @@ export const FEATURES = [
       "Export structured gap reports instantly into clean PDF print documents, raw Markdown, or plain text files.",
   },
   {
-    title: "6 Free AI Cloud Providers",
+    title: "4 Free-Tier AI Providers",
     description:
-      "Powered by free AI cloud providers: Groq LPU, Google Gemini, OpenRouter, Cerebras, SambaNova, and Hugging Face.",
+      "Free-tier inference through Gemini, Groq, SambaNova, and OpenRouter; optional credit-based Cerebras and Hugging Face integrations.",
   },
   {
-    title: "Chroma & FAISS Vector Indexing",
+    title: "FAISS Vector Indexing",
     description:
       "Automated PDF text layer extraction, sentence-transformer embeddings, and local vector database indexing.",
   },
@@ -115,7 +115,7 @@ export const HOW_IT_WORKS_STEPS = [
     step: 1,
     title: "Query Academic Literature",
     description:
-      "Enter any research topic or question. The platform searches 6 free academic sources and filters papers from 2024–2026.",
+      "Enter any research topic or question. The platform searches 6 free academic sources and filters papers from the current and previous two calendar years.",
   },
   {
     step: 2,

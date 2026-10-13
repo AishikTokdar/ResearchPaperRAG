@@ -7,6 +7,8 @@ export function isValidChatApiSessionId(value: string): boolean {
   return UUID_V4_RE.test(value.trim());
 }
 
+let volatileSessionId = "";
+
 function newSessionUuid(): string {
   const c = globalThis.crypto;
   if (c && typeof c.randomUUID === "function") {
@@ -16,25 +18,25 @@ function newSessionUuid(): string {
 }
 
 export function getChatApiSessionId(): string {
-  if (typeof window === "undefined") {
-    try {
-      return newSessionUuid();
-    } catch {
-      return "";
-    }
-  }
   try {
-    let id = localStorage.getItem(STORAGE_KEY);
-    if (!id || !isValidChatApiSessionId(id)) {
-      id = newSessionUuid();
-      localStorage.setItem(STORAGE_KEY, id);
+    const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    if (stored && isValidChatApiSessionId(stored)) {
+      volatileSessionId = stored;
+      return stored;
     }
-    return id;
+    if (!volatileSessionId) volatileSessionId = newSessionUuid();
+    if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, volatileSessionId);
   } catch {
-    try {
-      return newSessionUuid();
-    } catch {
-      return "";
+    // A stable in-memory capability keeps search, ingestion and follow-up connected
+    // when private browsing or a storage policy blocks localStorage.
+    if (!volatileSessionId) {
+      try { volatileSessionId = newSessionUuid(); } catch { return ""; }
     }
   }
+  return volatileSessionId;
+}
+
+export function resetChatApiSessionId(): void {
+  volatileSessionId = newSessionUuid();
+  try { localStorage.setItem(STORAGE_KEY, volatileSessionId); } catch { /* In-memory session remains usable. */ }
 }
