@@ -71,8 +71,8 @@ export function ConfirmAlertDialog({
               alertDialogButtonBase,
               "min-w-[6.5rem]",
               destructive
-                ? "border border-red-500/35 bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-950/50 hover:from-red-500 hover:to-rose-500"
-                : "border border-white/10 bg-gradient-to-r from-purple-800 via-blue-800 to-sky-700 text-white shadow-md shadow-black/30 hover:opacity-95",
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-indigo-600 text-white hover:bg-indigo-700",
             )}
           >
             {pending ? "Please wait…" : confirmLabel}

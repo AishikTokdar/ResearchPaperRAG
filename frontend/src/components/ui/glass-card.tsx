@@ -3,20 +3,20 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const glassCardShellVariants = cva(
-  "relative border bg-white dark:bg-zinc-900/90 border-zinc-200 dark:border-zinc-800 transition-all duration-200",
+  "relative surface-card border transition-all duration-200",
   {
     variants: {
       variant: {
         default: "shadow-sm",
         hover:
-          "shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 hover:scale-[1.01]",
+          "shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 ",
         glow: "shadow-md border-zinc-300 dark:border-zinc-700",
         outline: "bg-transparent border-2 border-zinc-200 dark:border-zinc-800",
       },
       radius: {
-        default: "rounded-2xl",
+        default: "rounded-lg",
         sm: "rounded-xl",
-        lg: "rounded-3xl",
+        lg: "rounded-xl",
         full: "rounded-full",
       },
     },
@@ -30,9 +30,9 @@ const glassCardShellVariants = cva(
 const glassCardInnerVariants = cva("h-full min-h-0 w-full overflow-hidden", {
   variants: {
     radius: {
-      default: "rounded-2xl",
+      default: "rounded-lg",
       sm: "rounded-xl",
-      lg: "rounded-3xl",
+      lg: "rounded-xl",
       full: "rounded-full",
     },
     padding: {

@@ -1,19 +1,21 @@
 import { Toaster as SonnerToaster } from "sonner";
+import { useTheme } from "@/context/theme-context";
 
 export function Toaster() {
+  const { isDark } = useTheme();
   return (
     <SonnerToaster
       position="bottom-right"
-      theme="dark"
+      theme={isDark ? "dark" : "light"}
       richColors
       closeButton
       expand={false}
       toastOptions={{
         classNames: {
           toast:
-            "group border border-white/10 bg-slate-900/95 text-white shadow-xl backdrop-blur-md",
-          title: "text-sm font-semibold text-white",
-          description: "text-xs text-slate-300",
+            "group border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] shadow-md",
+          title: "text-sm font-semibold",
+          description: "text-xs text-[var(--text-muted)]",
         },
       }}
     />

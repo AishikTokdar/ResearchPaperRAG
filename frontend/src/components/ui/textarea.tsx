@@ -55,7 +55,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={textareaRef}
           className={cn(
             "block min-h-[100px] w-full max-w-full rounded-xl border bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-300",
-            "focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50",
+            "focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50",
             "transition-all duration-200",
             "disabled:cursor-not-allowed disabled:opacity-50",
             error
