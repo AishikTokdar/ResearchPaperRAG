@@ -16,17 +16,18 @@ const pipelineSteps = [
   { name: "Extract Text Layer", description: "Pull native text layers and abstracts from document pages.", icon: FileText, badge: "Extraction" },
   { name: "Semantic Chunking", description: "Split extracted text into overlapping semantic segments for dense vector retrieval.", icon: Scissors, badge: "Chunking" },
   { name: "Embedding Pass", description: "Vectorize text segments using sentence-transformers (all-MiniLM-L6-v2).", icon: Brain, badge: "Vectorize" },
-  { name: "Vector Indexing", description: "Update local Chroma / FAISS vector stores for similarity search.", icon: Database, badge: "Indexing" },
+  { name: "Vector Indexing", description: "Update local FAISS vector stores for similarity search.", icon: Database, badge: "Indexing" },
   { name: "Session Metadata", description: "Wire document ID, 3-year publication filters, and active paper counters.", icon: Sliders, badge: "Session" },
   { name: "8-Layer RAG Synthesis", description: "Handoff vector context to LLM for literature summary, trend detection, and gap analysis.", icon: Sparkles, badge: "Synthesis" },
 ];
 
 export function PipelineSection() {
   return (
-    <SectionWrapper id="pipeline">
+    <SectionWrapper className="editorial-section" id="pipeline">
       <div className="mb-12 text-center space-y-3">
+        <p className="section-kicker">Under the hood</p>
         <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight">
-          Step-by-Step RAG Processing Pipeline
+          How your papers are processed
         </h2>
         <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
           Every research paper selected passes through seven automated background stages before generating 8-layer research reports.
@@ -52,7 +53,7 @@ export function PipelineSection() {
                       {step.badge}
                     </Badge>
                   </div>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
+                  <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
                     {step.description}
                   </p>
                 </div>

@@ -16,9 +16,9 @@ const techCategories: TechCategory[] = [
     icon: Code2,
     techs: [
       { name: "React 18", description: "UI Framework" },
-      { name: "TypeScript 5", description: "Type Safety" },
+      { name: "TypeScript 6", description: "Type Safety" },
       { name: "Tailwind CSS 3", description: "Styling" },
-      { name: "Vite 5", description: "Bundler" },
+      { name: "Vite 8", description: "Bundler" },
       { name: "Framer Motion", description: "Transitions" },
     ],
   },
@@ -55,8 +55,9 @@ const techCategories: TechCategory[] = [
 
 export function TechStackSection() {
   return (
-    <SectionWrapper id="tech-stack">
+    <SectionWrapper className="editorial-section" id="tech-stack">
       <div className="mb-12 text-center">
+        <p className="section-kicker">Technology</p>
         <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight mb-3">
           Technology Stack
         </h2>

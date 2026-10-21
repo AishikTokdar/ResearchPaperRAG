@@ -1,3 +1,4 @@
+import modelCatalog from "@/lib/model-catalog.json";
 import { Globe, Sparkles, Library, Cpu, Layers, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SpotlightCard } from "@/components/ui/spotlight-card";
@@ -12,60 +13,25 @@ type ProviderBlock = {
   badge: string;
 };
 
-const providers: ProviderBlock[] = [
-  {
-    name: "Groq LPU (Primary Free)",
-    icon: Zap,
-    description: "Free tier via Google AI Studio — Gemini 2.5 Flash, Flash-Lite, Pro, and 2.0 Flash.",
-    models: ["GPT-OSS 120B", "GPT-OSS 20B", "Qwen 3.6 27B"],
-    badge: "Primary",
-  },
-  {
-    name: "Google Gemini (Second)",
-    icon: Sparkles,
-    description: "Second-choice fallback via Google AI Studio's free tier.",
-    models: ["Gemini 3.6 Flash", "Gemini 3.5 Flash", "Gemini 3.5 Flash-Lite", "Gemini 3.1 Flash-Lite"],
-    badge: "Second Choice",
-  },
-  {
-    name: "Cerebras (Free)",
-    icon: Cpu,
-    description: "Free 2000+ tokens/sec inference on Cerebras Wafer-Scale Engine.",
-    models: ["GPT-OSS 120B", "Gemma 4 31B", "Qwen 3 32B"],
-    badge: "Ultra Fast",
-  },
-  {
-    name: "SambaNova (Free)",
-    icon: Layers,
-    description: "Free Cloud inference powered by SambaNova SN40L reconfigurable chips.",
-    models: ["DeepSeek V3", "DeepSeek R1", "Llama 4 Maverick", "Llama 4 Scout"],
-    badge: "High Speed",
-  },
-  {
-    name: "Hugging Face (Free)",
-    icon: Library,
-    description: "Free serverless open-weight models via Hugging Face router.",
-    models: ["Gemma 4 31B", "GPT-OSS 120B", "Qwen 3.5 27B"],
-    badge: "Free Router",
-  },
-  {
-    name: "OpenRouter (Free Tier)",
-    icon: Globe,
-    description: "100% free-tier zero-credit models via OpenRouter.",
-    models: ["GPT-OSS 120B Free", "Gemini 3.1 Flash-Lite Free", "GLM 4.7 Free", "Auto Free Router"],
-    badge: "Free Tier",
-  },
-];
+const icons: Record<string, LucideIcon> = { gemini: Sparkles, groq: Zap, cerebras: Cpu, sambanova: Layers, huggingface: Library, openrouter: Globe };
+const labels: Record<string, string> = { gemini: "Google Gemini", groq: "Groq", cerebras: "Cerebras", sambanova: "SambaNova", huggingface: "Hugging Face", openrouter: "OpenRouter" };
+const providers: ProviderBlock[] = modelCatalog.providers.map(provider => ({
+  name: labels[provider.name], icon: icons[provider.name],
+  description: provider.access_tier === "free" ? "Free API tier, subject to account eligibility and quotas." : provider.access_tier === "trial" ? "Trial credits. Requires an explicit server opt-in; excluded from free fallback." : "Purchased credits. Requires an explicit server opt-in; excluded from free fallback.",
+  models: provider.models.map(model => model.name),
+  badge: provider.access_tier === "free" ? "Free tier" : provider.access_tier === "trial" ? "Trial" : "Credits",
+}));
 
 export function ModelsSection() {
   return (
-    <SectionWrapper id="models">
+    <SectionWrapper className="editorial-section" id="models">
       <div className="mb-12 text-center">
+        <p className="section-kicker">Model support</p>
         <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight mb-3">
           Supported AI Models &amp; Providers
         </h2>
         <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
-          Six free-tier AI providers offering sub-second responses with zero costs and automatic failover.
+          Four providers with documented free API tiers, plus two optional credit-based integrations. The workspace shows which are configured on this server.
         </p>
       </div>
 
@@ -77,7 +43,7 @@ export function ModelsSection() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200/60 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 dark:text-zinc-400">
                       <Icon className="w-4 h-4" />
                     </div>
                     <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">

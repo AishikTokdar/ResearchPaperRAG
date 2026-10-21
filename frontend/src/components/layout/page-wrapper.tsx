@@ -1,5 +1,5 @@
 import * as React from "react";
-import { motion } from "framer-motion";
+import { motion, MotionConfig, useReducedMotion, type Variants } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Header } from "./header";
 import { Footer } from "./footer";
@@ -13,7 +13,7 @@ export interface PageWrapperProps {
   clipHorizontal?: boolean;
 }
 
-const pageVariants = {
+const pageVariants: Variants = {
   initial: {
     opacity: 0,
     y: 10,
@@ -42,35 +42,39 @@ export function PageWrapper({
   noAnimation = false,
   clipHorizontal = true,
 }: PageWrapperProps) {
+  const reducedMotion = useReducedMotion();
   const content = (
-    <main className={cn("flex-1 min-h-0", className)}>{children}</main>
+    <main id="main-content" tabIndex={-1} className={cn("flex-1 min-h-0", className)}>{children}</main>
   );
 
   return (
-    <div
-      className={cn(
-        "min-h-screen w-full flex flex-col relative bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-250",
-        clipHorizontal ? "overflow-x-clip" : "overflow-x-visible",
-      )}
-    >
-      <Header />
+    <MotionConfig reducedMotion="user">
+      <div
+        className={cn(
+          "min-h-screen w-full flex flex-col relative app-shell text-zinc-900 dark:text-zinc-100 transition-colors duration-250",
+          clipHorizontal ? "overflow-x-clip" : "overflow-x-visible",
+        )}
+      >
+        <a href="#main-content" className="skip-link">Skip to content</a>
+        <Header />
 
-      {noAnimation ? (
-        content
-      ) : (
-        <motion.div
-          className="flex-1 min-h-0 flex flex-col"
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          variants={pageVariants}
-        >
-          {content}
-        </motion.div>
-      )}
+        {noAnimation || reducedMotion ? (
+          content
+        ) : (
+          <motion.div
+            className="flex-1 min-h-0 flex flex-col"
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            variants={pageVariants}
+          >
+            {content}
+          </motion.div>
+        )}
 
-      {showFooter && <Footer />}
-    </div>
+        {showFooter && <Footer />}
+      </div>
+    </MotionConfig>
   );
 }
 
@@ -85,8 +89,13 @@ export function SectionWrapper({
   className,
   id,
 }: SectionWrapperProps) {
+  const reducedMotion = useReducedMotion();
   return (
-    <section
+    <motion.section
+      initial={reducedMotion ? false : { opacity: 0 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.03 }}
+      transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
       id={id}
       className={cn(
         "w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16",
@@ -94,6 +103,6 @@ export function SectionWrapper({
       )}
     >
       {children}
-    </section>
+    </motion.section>
   );
 }

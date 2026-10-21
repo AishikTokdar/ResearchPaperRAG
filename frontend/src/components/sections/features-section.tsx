@@ -1,62 +1,19 @@
-import {
-  Search,
-  Calendar,
-  Layers,
-  FileText,
-  MessageSquare,
-  Download,
-  Cpu,
-  Database,
-  ExternalLink,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { SpotlightCard } from "@/components/ui/spotlight-card";
 import { SectionWrapper } from "@/components/layout/page-wrapper";
-import { FEATURES } from "@/lib/constants";
 
-const featureIcons: LucideIcon[] = [
-  Search,
-  Calendar,
-  Layers,
-  FileText,
-  MessageSquare,
-  Download,
-  Cpu,
-  Database,
-  ExternalLink,
+const capabilities = [
+  { title: "Build a focused reading list", description: "Search arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, and DOAJ. Review recent results, open the original papers, and select up to five sources. You can also upload your own PDFs." },
+  { title: "Read the connections", description: "Compare methods and findings across papers. The report brings together shared limitations, contradictions, and research gaps, with citations back to the available evidence." },
+  { title: "Keep the work moving", description: "Watch the analysis progress, ask a follow-up question, and take the report into your own writing. Copy the full text or export a PDF, Markdown, or plain text file." },
 ];
 
 export function FeaturesSection() {
   return (
-    <SectionWrapper id="features">
-      <div className="mb-12 text-center space-y-3">
-        <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight">
-          Research Capabilities &amp; Architecture
-        </h2>
-        <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
-          Everything required for automated academic paper retrieval, 3-year publication filtering, vector embedding, and 8-layer LLM synthesis.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {FEATURES.map((feature, index) => {
-          const Icon = featureIcons[index % featureIcons.length];
-          return (
-            <SpotlightCard key={feature.title} spotlightColor="rgba(99, 102, 241, 0.12)">
-              <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                  <Icon className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                  {feature.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  {feature.description}
-                </p>
-              </div>
-            </SpotlightCard>
-          );
-        })}
+    <SectionWrapper id="features" className="reading-capabilities">
+      <div className="grid gap-8 lg:grid-cols-[1fr_2fr] lg:gap-20">
+        <div><p className="section-kicker">Working with your sources</p><h2 className="editorial-title text-3xl sm:text-4xl">Less scattered reading.<br />More room to think.</h2><p className="mt-5 max-w-sm text-sm leading-7 text-[var(--text-muted)]">A place to work through a small set of papers before deciding where to go next.</p></div>
+        <div className="divide-y divide-[var(--border-color)] border-t border-[var(--border-color)]">
+          {capabilities.map(item => <article key={item.title} className="py-6 first:pt-5"><h3 className="text-lg font-medium tracking-tight">{item.title}</h3><p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--text-muted)]">{item.description}</p></article>)}
+        </div>
       </div>
     </SectionWrapper>
   );

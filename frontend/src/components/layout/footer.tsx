@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Github, Linkedin } from "lucide-react";
+import { Github, Linkedin, BookOpen } from "lucide-react";
 import {
   APP_CONFIG,
   NAV_LINKS,
@@ -9,13 +9,13 @@ import {
 
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-colors">
+    <footer className="brand-footer mt-auto border-t border-zinc-200 dark:border-zinc-800 bg-[var(--bg-main)] transition-colors">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           <div className="md:col-span-2 space-y-4">
             <Link to="/" className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center text-zinc-100 dark:text-zinc-900 font-bold text-sm">
-                R
+              <div className="h-9 w-9 rounded-xl brand-mark flex items-center justify-center">
+                <BookOpen className="h-4 w-4" aria-hidden="true" />
               </div>
               <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 {APP_CONFIG.name}
@@ -47,7 +47,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
+            <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-500 mb-4">
               Navigation
             </h3>
             <ul className="space-y-2.5">
@@ -65,7 +65,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
+            <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-500 mb-4">
               Built With
             </h3>
             <ul className="space-y-2.5">
@@ -73,7 +73,7 @@ export function Footer() {
                 <li key={tech.name}>
                   <span className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                     {tech.name}
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">
+                    <span className="text-xs text-zinc-400 dark:text-zinc-600 dark:text-zinc-400">
                       ({tech.category})
                     </span>
                   </span>

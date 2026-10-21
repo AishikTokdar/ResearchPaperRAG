@@ -1,70 +1,35 @@
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowRight, Filter } from "lucide-react";
-import { Button, Badge, AnimatedGridPattern, BorderBeam, ScrambleText } from "@/components/ui";
+import { motion, useReducedMotion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { REPORT_SECTIONS } from "@/lib/analysis-progress";
 
 export function HeroSection() {
   const navigate = useNavigate();
-
+  const reduceMotion = useReducedMotion();
   return (
-    <section className="relative py-16 sm:py-24 overflow-hidden">
-      <AnimatedGridPattern />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center relative z-10">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="flex flex-col items-center max-w-4xl"
-        >
-          <div className="relative inline-block mb-6">
-            <Badge variant="outline" className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20">
-              <Filter className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
-              Automated Academic Literature Search &amp; ResearchPaper RAG Synthesis
-            </Badge>
-            <BorderBeam size={140} duration={8} colorFrom="#6366f1" colorTo="#3b82f6" />
-          </div>
-
-          <h1 className="text-4xl sm:text-6xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight leading-[1.1] mb-6">
-            Discover Research Gaps with{" "}
-            <span className="text-indigo-600 dark:text-indigo-400">
-              <ScrambleText text="ResearchPaper RAG" />
-            </span>
-          </h1>
-
-          <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed mb-8 max-w-3xl">
-            Query 6 free academic sources (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ) across the last 3 publication years (2024-2026), ingest up to 5 papers, and generate structured 8-layer literature synthesis reports with grounded follow-up chat.
-          </p>
-
-          <div className="flex flex-wrap justify-center gap-2 mb-10 text-xs font-medium">
-            <span className="px-2.5 py-1 rounded-full bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20">arXiv</span>
-            <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">Crossref</span>
-            <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">Semantic Scholar</span>
-            <span className="px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/20">OpenAlex</span>
-            <span className="px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-400 border border-teal-500/20">PubMed (Healthcare)</span>
-            <span className="px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-500/20">DOAJ</span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-3.5">
-            <Button size="lg" onClick={() => navigate("/chat")} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md px-8 py-6 text-base">
-              Start Research Analysis
-              <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-            </Button>
-          </div>
-
-          <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 w-full pt-8 border-t border-zinc-200 dark:border-zinc-800">
-            {[
-              { value: "6 Free APIs", label: "Academic Sources" },
-              { value: "2024–2026", label: "3-Year Literature Window" },
-              { value: "8 Layers", label: "Structured Analysis" },
-              { value: "5 Papers", label: "Max Knowledge Base" },
-            ].map((stat, idx) => (
-              <div key={idx} className="text-center space-y-1">
-                <div className="text-xl sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">{stat.value}</div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+    <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+      <motion.div initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="grid items-start gap-12 lg:grid-cols-[1.4fr_1fr] lg:gap-24">
+        <div>
+          <p className="section-kicker mb-6">A workspace for the literature</p>
+          <h1 className="editorial-title max-w-3xl text-5xl leading-[1.08] sm:text-6xl lg:text-7xl">Read across papers.<br />Find your next question.</h1>
+          <p className="mt-6 max-w-xl text-base leading-7 text-zinc-600 dark:text-zinc-400">Bring related studies into one workspace. Compare their methods, examine what they leave unanswered, and trace the findings back to your sources.</p>
+          <Button size="lg" onClick={() => navigate("/chat")} className="mt-8 w-full px-6 sm:w-auto">Start Research Analysis <ArrowRight className="h-4 w-4" /></Button>
+          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm text-[var(--text-muted)]"><span>Search or bring your own PDFs.</span><a href="#how-it-works" className="inline-flex min-h-8 items-center underline underline-offset-4 hover:text-[var(--text-main)]">See the workflow</a></div>
+        </div>
+        <aside className="report-specimen lg:mt-4" aria-labelledby="report-outline-title">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border-color)] pb-4 text-xs text-[var(--text-muted)]"><span>Report structure</span><span>8 sections</span></div>
+          <h2 id="report-outline-title" className="editorial-title mb-3 mt-6 text-3xl">A considered view<br />of your sources.</h2>
+          <p className="mb-5 text-sm leading-6 text-[var(--text-muted)]">One report to read across the studies you choose.</p>
+          <ol className="divide-y divide-[var(--border-color)]">
+            {REPORT_SECTIONS.map((section, index) => <li key={section} className="flex items-baseline gap-4 py-2.5"><span className="font-mono text-xs text-[var(--text-muted)]">{String(index + 1).padStart(2, "0")}</span><span className="text-sm">{section}</span></li>)}
+          </ol>
+          <p className="mt-5 border-t border-[var(--border-color)] pt-4 text-xs leading-5 text-[var(--text-muted)]">Follow up with questions. Copy or export as PDF, Markdown, or text.</p>
+        </aside>
+      </motion.div>
+      <div className="mt-14 border-t border-[var(--border-color)] pt-6 sm:mt-20">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">Literature from</p>
+        <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-400">arXiv <span className="mx-2 text-zinc-400">/</span> Crossref <span className="mx-2 text-zinc-400">/</span> Semantic Scholar <span className="mx-2 text-zinc-400">/</span> OpenAlex <span className="mx-2 text-zinc-400">/</span> PubMed <span className="mx-2 text-zinc-400">/</span> DOAJ</p>
       </div>
     </section>
   );
