@@ -23,7 +23,7 @@ export function ApiStatusPage() {
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
-  const activeApiUrl = resolveApiBaseUrl();
+  const activeApiUrl = resolveApiBaseUrl() || window.location.origin;
 
   const load = React.useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -50,7 +50,9 @@ export function ApiStatusPage() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "working":
-        return "Working";
+        return "Configured";
+      case "disabled":
+        return "Disabled by server policy";
       case "api_key_not_set":
         return "API Key Not Set";
       case "invalid_api_key":
@@ -86,17 +88,18 @@ export function ApiStatusPage() {
   return (
     <PageWrapper>
       <SectionWrapper>
+        <p className="section-kicker">Service overview</p>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Activity className="w-5 h-5 text-emerald-500 animate-pulse" />
+              <Activity className="w-5 h-5 text-indigo-500" />
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
                 Backend System Status
               </h1>
             </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-              Base URL: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{activeApiUrl}</span>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono break-all">
+              Base URL: <span className="font-semibold text-emerald-700 dark:text-emerald-400">{activeApiUrl}</span>
             </p>
           </div>
 
@@ -121,7 +124,7 @@ export function ApiStatusPage() {
         </div>
 
         {err && (
-          <GlassCard padding="default" className="mb-6 border-red-500/50 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300">
+          <GlassCard role="alert" padding="default" className="mb-6 border-red-500/50 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300">
             <p className="text-sm font-medium">Failed to connect to backend ({activeApiUrl}): {err}</p>
           </GlassCard>
         )}
@@ -149,7 +152,7 @@ export function ApiStatusPage() {
                 <Cpu className="w-4 h-4" />
               </div>
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                {data?.default_model ?? "gemini-3.6-flash"}
+                {data?.default_model ?? (loading ? "Checking…" : "Unavailable")}
               </div>
             </GlassCardContent>
           </GlassCard>
@@ -161,7 +164,7 @@ export function ApiStatusPage() {
                 <ShieldCheck className="w-4 h-4" />
               </div>
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                1000 chars
+                {data?.embedding_chunk_tokens ? `${data.embedding_chunk_tokens} tokens` : "Unavailable"}
               </div>
             </GlassCardContent>
           </GlassCard>
@@ -173,7 +176,7 @@ export function ApiStatusPage() {
                 <FileJson2 className="w-4 h-4" />
               </div>
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                200 chars
+                {data?.embedding_overlap_tokens !== undefined ? `${data.embedding_overlap_tokens} tokens` : "Unavailable"}
               </div>
             </GlassCardContent>
           </GlassCard>

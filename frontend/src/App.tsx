@@ -32,7 +32,7 @@ function AppFallback() {
 
 function App() {
   return (
-    <Sentry.ErrorBoundary fallback={<AppFallback />} showDialog>
+    <Sentry.ErrorBoundary fallback={<AppFallback />}>
       <ThemeProvider>
         <BrowserRouter>
           <GlobalBackground />

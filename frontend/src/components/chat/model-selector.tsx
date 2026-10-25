@@ -29,6 +29,13 @@ export function ModelSelector({
   const [models, setModels] = React.useState<AIModel[]>(AI_MODELS);
   const [selectedProviderFilter, setSelectedProviderFilter] = React.useState<string>("all");
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const panelId = React.useId();
+  React.useEffect(() => {
+    if (isOpen) containerRef.current?.querySelector<HTMLSelectElement>("select")?.focus();
+  }, [isOpen]);
+  const selectionRef = React.useRef({ value, onChange });
+  React.useEffect(() => { selectionRef.current = { value, onChange }; }, [value, onChange]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -46,6 +53,8 @@ export function ModelSelector({
               is_default: boolean;
               is_available?: boolean;
               api_key_env?: string;
+              access_tier?: string;
+              is_preview?: boolean;
             }) => ({
               id: m.id,
               name: m.name,
@@ -53,17 +62,21 @@ export function ModelSelector({
               isDefault: m.is_default,
               isAvailable: m.is_available ?? true,
               apiKeyEnv: m.api_key_env,
+              accessTier: m.access_tier,
+              description: `${m.is_preview ? "Preview · " : ""}${m.access_tier === "trial" ? "Trial credits · server opt-in required" : m.access_tier === "credits" ? "Purchased credits · server opt-in required" : "Free tier · subject to quotas"}`,
             }),
           );
           setModels(live);
 
           const firstAvailable = live.find((m) => m.isAvailable !== false);
-          const current = live.find((m) => m.id === value);
+          const { value: activeValue, onChange: notify } = selectionRef.current;
+          const current = live.find((m) => m.id === activeValue);
           if (firstAvailable && (!current || current.isAvailable === false)) {
-            onChange(firstAvailable);
+            notify(firstAvailable);
           }
         }
       } catch {
+        // Retain the configured model list when discovery fails.
       }
     })();
     return () => {
@@ -130,9 +143,17 @@ export function ModelSelector({
   const SelectedIcon = providerLabels[selected?.provider]?.icon ?? Cpu;
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div ref={containerRef} className="relative w-full" onKeyDown={(event) => {
+      if (event.key === "Escape" && isOpen) { event.stopPropagation(); setIsOpen(false); triggerRef.current?.focus(); }
+    }}>
+
       <button
         type="button"
+        ref={triggerRef}
+        aria-label="Choose analysis model"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? panelId : undefined}
+        aria-haspopup="dialog"
         disabled={disabled}
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
@@ -151,14 +172,14 @@ export function ModelSelector({
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-1">
           {selected?.isAvailable !== false ? (
-            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
+            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
               <CheckCircle2 className="w-2.5 h-2.5" />
-              Ready
+              Configured
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/60">
+            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/60">
               <AlertCircle className="w-2.5 h-2.5" />
-              Key Needed
+              Not configured
             </span>
           )}
           <ChevronDown className={cn("w-3.5 h-3.5 transition-transform text-zinc-400", isOpen && "rotate-180")} />
@@ -168,23 +189,25 @@ export function ModelSelector({
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            id={panelId} role="dialog" aria-label="Analysis model selection"
             initial={{ opacity: 0, y: -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.12 }}
-            className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden max-h-96 flex flex-col"
+            className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-md overflow-hidden max-h-96 flex flex-col"
           >
             <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 space-y-2 shrink-0">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">Select AI Model</span>
-                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/40">
-                  {availableModels.length} Ready
+                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/40">
+                  {availableModels.length} configured
                 </span>
               </div>
 
               <div className="relative flex items-center">
                 <Filter className="w-3.5 h-3.5 absolute left-2.5 text-zinc-400 pointer-events-none" />
                 <select
+                  aria-label="Filter model providers"
                   value={selectedProviderFilter}
                   onChange={handleProviderSelectChange}
                   className="w-full pl-8 pr-8 py-1.5 rounded-xl text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 appearance-none font-medium cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -194,7 +217,7 @@ export function ModelSelector({
                     const isReady = provModels.some((m) => m.isAvailable !== false);
                     return (
                       <option key={provKey} value={provKey}>
-                        {providerLabels[provKey]?.label ?? provKey} ({provModels.length} models) {isReady ? "— READY" : "— Key Needed"}
+                        {providerLabels[provKey]?.label ?? provKey} ({provModels.length} models) {isReady ? "— READY" : "— Not configured"}
                       </option>
                     );
                   })}
@@ -208,7 +231,7 @@ export function ModelSelector({
                 <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
                   <div className="flex items-center gap-1.5 font-semibold">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                    No API keys configured on backend
+                    No eligible provider is configured
                   </div>
                   <p>Add a free key (e.g. <code className="font-mono font-bold">GROQ_API_KEY</code>) to <code className="font-mono">backend/.env</code> file.</p>
                 </div>
@@ -223,18 +246,18 @@ export function ModelSelector({
 
                   return (
                     <div key={provKey} className="space-y-1">
-                      <div className="flex items-center justify-between px-2 py-1 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider bg-zinc-100/60 dark:bg-zinc-800/40 rounded-lg">
+                      <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-100/60 dark:bg-zinc-800/40 rounded-lg">
                         <div className="flex items-center gap-1.5">
                           <ProvIcon className="w-3.5 h-3.5" />
                           <span>{provInfo.label}</span>
                         </div>
                         {hasReadyInProv ? (
-                          <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800/40">
-                            Ready
+                          <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800/40">
+                            Configured
                           </span>
                         ) : (
-                          <span className="text-[9px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800/40">
-                            Key Needed
+                          <span className="text-[9px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800/40">
+                            Not configured
                           </span>
                         )}
                       </div>
@@ -244,15 +267,11 @@ export function ModelSelector({
                         const isSelected = model.id === value;
 
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={model.id}
-                            role="button"
-                            tabIndex={0}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectModel(model);
-                            }}
-                            onClick={() => handleSelectModel(model)}
+                            aria-pressed={isSelected}
+                            onClick={() => { handleSelectModel(model); triggerRef.current?.focus(); }}
                             className={cn(
                               "w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-all cursor-pointer select-none group",
                               isConfigured
@@ -274,17 +293,17 @@ export function ModelSelector({
 
                             <div className="flex items-center gap-1.5 shrink-0">
                               {isConfigured ? (
-                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded font-mono border border-emerald-200 dark:border-emerald-800/40">
-                                  Ready
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded font-mono border border-emerald-200 dark:border-emerald-800/40">
+                                  Configured
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-mono border border-amber-200 dark:border-amber-800/40">
-                                  Key Needed
+                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-mono border border-amber-200 dark:border-amber-800/40">
+                                  Not configured
                                 </span>
                               )}
                               {isSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0 ml-1" />}
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>

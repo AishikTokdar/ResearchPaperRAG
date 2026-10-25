@@ -1,7 +1,6 @@
+import { stripProcessingNotices } from "@/lib/processing-notices";
 import * as React from "react";
 import { Download, FileText, FileCode, Printer, ExternalLink, Copy, Check, AlertTriangle } from "lucide-react";
-// @ts-ignore
-import html2pdf from "html2pdf.js";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -23,7 +22,8 @@ function getReportFilename(topic: string, ext: string): string {
   return `${cleanTopic}_gap_report.${ext}`;
 }
 
-export function ReportRenderer({ report, topic }: ReportRendererProps) {
+export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps) {
+  const report = stripProcessingNotices(rawReport);
   const [copiedFull, setCopiedFull] = React.useState(false);
 
   const handleCopyFullReport = async () => {
@@ -50,7 +50,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
 
   const handleDownloadTxt = () => {
     const sanitized = sanitizeReportMarkdown(report);
-    let plainText = sanitized
+    const plainText = sanitized
       .replace(/^#\s+[^\n]+\n*/m, "")
       .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 (Link: $2)")
       .replace(/\[\*\*([^*]+)\*\*\]/g, "$1")
@@ -63,7 +63,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
       .replace(/^[*-]\s+/gm, "  • ")
       .replace(/^\d+\.\s+/gm, (m) => `  ${m}`)
       .replace(/\|/g, "  ")
-      .replace(/^\s*[\+•\|]?\s*[\-\+=]{3,}.*$/gm, "")
+      .replace(/^\s*[+•|]?\s*[-+=]{3,}.*$/gm, "")
       .replace(/```[a-zA-Z]*/g, "")
       .replace(/\n{3,}/g, "\n\n");
 
@@ -78,7 +78,8 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
   };
 
   const handleDownloadPdf = async () => {
-    const parsedHtml = renderMarkdownToHtmlString(report);
+    const parsedHtml = await renderMarkdownToHtmlString(report);
+    const safeTopic = topic.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
     const container = document.createElement("div");
     container.style.padding = "24px";
     container.style.maxWidth = "800px";
@@ -91,13 +92,13 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
       <div style="border-bottom: 3px solid #4f46e5; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;">
         <div>
           <h1 style="font-size: 20px; font-weight: 800; color: #111827; margin: 0 0 4px 0;">Research Analysis & Gap Report</h1>
-          <div style="font-size: 13px; color: #4f46e5; font-weight: 600;">Topic: ${topic}</div>
+          <div style="font-size: 13px; color: #4f46e5; font-weight: 600;">Topic: ${safeTopic}</div>
         </div>
         <div style="font-size: 10.5px; color: #6b7280; font-weight: 500;">AI Research Synthesis</div>
       </div>
       <div>${parsedHtml}</div>
       <div style="margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 10px; font-size: 10.5px; color: #6b7280; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-weight: 500; color: #4b5563;">Research Analysis & Gap Report • ${topic}</span>
+        <span style="font-weight: 500; color: #4b5563;">Research Analysis & Gap Report • ${safeTopic}</span>
         <span style="background: #eef2ff; color: #4f46e5; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 10px; border: 1px solid #c7d2fe;">Interactive PDF</span>
       </div>
     `;
@@ -114,6 +115,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
 
 
     try {
+      const { default: html2pdf } = await import("html2pdf.js");
       await html2pdf().set(opt).from(container).save();
       toast.success("PDF report downloaded directly with clickable links!");
     } catch {
@@ -123,7 +125,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
           <!DOCTYPE html>
           <html>
             <head>
-              <title>Research Analysis & Gap Report - ${topic}</title>
+              <title>Research Analysis & Gap Report - ${safeTopic}</title>
               <style>
                 body { font-family: sans-serif; padding: 20px; color: #1f2937; }
                 a { color: #4f46e5; text-decoration: underline; }
@@ -132,7 +134,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
             <body>
               <div style="border-bottom: 2px solid #4f46e5; padding-bottom: 10px; margin-bottom: 20px;">
                 <h1>Research Analysis & Gap Report</h1>
-                <div>Topic: ${topic}</div>
+                <div>Topic: ${safeTopic}</div>
               </div>
               <div>${parsedHtml}</div>
               <script>window.onload = function() { window.print(); }</script>
@@ -153,7 +155,7 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
         <div>
           <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-indigo-500" /> 8-Layer Structured Research Report
+            <FileText className="w-4 h-4 text-indigo-500" /> Research report
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
             Topic: <span className="text-zinc-800 dark:text-zinc-200 font-semibold">{topic}</span>
@@ -172,13 +174,13 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
               </>
             )}
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDownloadMd} className="gap-1.5 text-xs">
+          <Button variant="outline" size="sm" onClick={handleDownloadMd} aria-label="Download Markdown report" className="gap-1.5 text-xs">
             <FileCode className="w-3.5 h-3.5" /> .md
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDownloadTxt} className="gap-1.5 text-xs">
+          <Button variant="outline" size="sm" onClick={handleDownloadTxt} aria-label="Download text report" className="gap-1.5 text-xs">
             <Download className="w-3.5 h-3.5" /> .txt
           </Button>
-          <Button variant="default" size="sm" onClick={handleDownloadPdf} className="gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+          <Button variant="default" size="sm" onClick={handleDownloadPdf} aria-label="Download PDF report" className="gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
             <Printer className="w-3.5 h-3.5" /> .pdf
           </Button>
         </div>
@@ -194,20 +196,20 @@ export function ReportRenderer({ report, topic }: ReportRendererProps) {
 export function sanitizeReportMarkdown(raw: string): string {
   if (!raw) return "";
 
-  let cleaned = raw;
+  let cleaned = stripProcessingNotices(raw);
 
   // 1. Separate subheaders directly attached to code fences like ``` ### Header
   cleaned = cleaned.replace(/```+\s*(###?\s+[^\n]+)/g, "\n\n$1");
 
   // 2. Strip ASCII box drawing borders like +-----------------+-----------------+ or • +-------+
-  cleaned = cleaned.replace(/^\s*(?:```\s*)?[\+•\|]?\s*[\-\+=]{3,}.*$/gm, "");
-  cleaned = cleaned.replace(/^\s*[\+•\|]\s*[\-\+=]{3,}.*$/gm, "");
+  cleaned = cleaned.replace(/^\s*(?:```\s*)?[+•|]?\s*[-+=]{3,}.*$/gm, "");
+  cleaned = cleaned.replace(/^\s*[+•|]\s*[-+=]{3,}.*$/gm, "");
 
   // 3. Remove orphaned backtick lines
   cleaned = cleaned.replace(/^\s*```[a-zA-Z]*\s*$/gm, "");
 
   // 4. Normalize section headers to standard "## N. Section Title"
-  cleaned = cleaned.replace(/^###?\s*(\d+\.\s+[^\n]+?)\:?\s*$/gm, "## $1");
+  cleaned = cleaned.replace(/^###?\s*(\d+\.\s+[^\n]+?):?\s*$/gm, "## $1");
   cleaned = cleaned.replace(/^\*\*\s*(\d+\.\s+[^*]+)\s*\*\*:?\s*$/gm, "## $1");
 
   // 5. Ensure headers (## and ###) have clean newlines around them
@@ -224,7 +226,7 @@ export function sanitizeReportMarkdown(raw: string): string {
 function ReportSectionsRenderer({ report }: { report: string }) {
   const sanitized = sanitizeReportMarkdown(report);
   let cleanedReport = sanitized.replace(/^#\s+[^\n]+\n*/m, "").trim();
-  cleanedReport = cleanedReport.replace(/^(---|---|\|\-\-+)\s*\n*/m, "").trim();
+  cleanedReport = cleanedReport.replace(/^(---|---|\|--+)\s*\n*/m, "").trim();
 
   const rawSections = cleanedReport.split(/(?=\n##\s|^##\s)/g);
 
@@ -239,7 +241,7 @@ function ReportSectionsRenderer({ report }: { report: string }) {
 
         const sectionContent = matchH2 ? trimmed.replace(/^##\s*.+$/m, "").trim() : trimmed;
 
-        const cleanContent = sectionContent.replace(/^(---|---|\|\-\-+)\s*\n*/g, "").trim();
+        const cleanContent = sectionContent.replace(/^(---|---|\|--+)\s*\n*/g, "").trim();
         if (!cleanContent) return null;
 
         return (
@@ -274,7 +276,7 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
           ? "bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200"
           : "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
         }`}>
-        <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`} />
+        <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`} />
         <div className="flex-1 leading-relaxed">
           <FormattedBlock text={alertMessage} />
         </div>
@@ -295,11 +297,10 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
   };
 
   return (
-    <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 border-l-4 border-l-indigo-500 shadow-sm space-y-3 relative group">
+    <div className="report-section border-t border-[var(--border-color)] pt-6 space-y-4 relative group">
       {sectionTitle ? (
-        <div className="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+          <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
             {sectionTitle}
           </h3>
           <Button
@@ -307,13 +308,13 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
             variant="ghost"
             size="sm"
             onClick={handleCopySection}
-            className="h-7 px-2.5 text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
+            className="h-9 px-2.5 text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
             title="Copy section text"
           >
             {copied ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" />
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Copied</span>
               </>
             ) : (
               <>
@@ -330,13 +331,13 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
             variant="ghost"
             size="sm"
             onClick={handleCopySection}
-            className="h-7 px-2.5 text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
+            className="h-9 px-2.5 text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
             title="Copy section text"
           >
             {copied ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" />
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Copied</span>
               </>
             ) : (
               <>
@@ -355,7 +356,7 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
 export function FormattedBlock({ text }: { text: string }) {
   if (!text) return null;
 
-  const lines = text.split("\n");
+  const lines = stripProcessingNotices(text).split("\n");
   const tableLines: string[] = [];
   const contentBlocks: { type: "text" | "table"; content: string }[] = [];
 
@@ -364,7 +365,7 @@ export function FormattedBlock({ text }: { text: string }) {
 
   for (const line of lines) {
     const trimmedLine = line.trim();
-    if (trimmedLine.match(/^(---|---|\|\-\-+|\*\*\*)$/)) {
+    if (trimmedLine.match(/^(---|---|\|--+|\*\*\*)$/)) {
       continue;
     }
 
@@ -451,7 +452,7 @@ export function FormattedBlock({ text }: { text: string }) {
             {paragraphs.map((p, pIdx) => {
               const cleanP = p.trim();
               if (!cleanP) return null;
-              if (cleanP.match(/^(---|---| -{3,}|\|\-\-+|\*\*\*)$/)) return null;
+              if (cleanP.match(/^(---|---| -{3,}|\|--+|\*\*\*)$/)) return null;
 
               const isFallbackAlert = cleanP.includes("[FALLBACK ALERT]");
               const isExhaustedAlert = cleanP.includes("[ALL MODELS EXHAUSTED]");
@@ -471,7 +472,7 @@ export function FormattedBlock({ text }: { text: string }) {
                         : "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
                       }`}
                   >
-                    <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`} />
+                    <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${isExhaustedAlert ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`} />
                     <div className="flex-1 leading-relaxed">
                       <RichInlineText text={alertText.replace(/\n/g, " ")} />
                     </div>
@@ -520,6 +521,7 @@ function TableRenderer({ tableMarkdown }: { tableMarkdown: string }) {
   return (
     <div className="overflow-x-auto my-3 rounded-xl border border-zinc-200 dark:border-zinc-800">
       <table className="w-full text-left text-xs border-collapse">
+        <caption className="sr-only">Comparison from the research report</caption>
         <thead className="bg-indigo-50/60 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold border-b border-indigo-500/20">
           <tr>
             {headers.map((h, i) => (
@@ -597,7 +599,7 @@ function RichInlineText({ text }: { text: string }) {
     const key = m.index;
 
     if (m[3] !== undefined) {
-      const rawText = m[2].replace(/[\*\_]/g, "").trim();
+      const rawText = m[2].replace(/[*_]/g, "").trim();
       const rawUrl = m[3].trim();
       const finalUrl = normalizeUrl(rawUrl);
       const isHttpUrl = finalUrl.startsWith("http://") || finalUrl.startsWith("https://");
@@ -645,7 +647,7 @@ function RichInlineText({ text }: { text: string }) {
         </code>
       );
     } else if (m[7] !== undefined && m[7].length > 1) {
-      const cleanCitationText = m[7].replace(/[\*\_]/g, "").trim();
+      const cleanCitationText = m[7].replace(/[*_]/g, "").trim();
       parts.push(
         <span
           key={key}
@@ -668,105 +670,8 @@ function RichInlineText({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-function renderMarkdownToHtmlString(markdown: string): string {
-  const sanitized = sanitizeReportMarkdown(markdown);
-  let cleanMd = sanitized.replace(/^#\s+[^\n]+\n*/m, "").trim();
-
-  cleanMd = cleanMd.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]/gi, "[$1]($2)");
-  cleanMd = cleanMd.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]/g, "[$1]($2)");
-  cleanMd = cleanMd.replace(/\[\[([^\]]+)\]\(([^)]+)\)\]/g, "[$1]($2)");
-  cleanMd = cleanMd.replace(/\[\*\*([^*]+)\*\*\]\(([^)]+)\)/g, "[$1]($2)");
-  cleanMd = cleanMd.replace(/\[\*\*([^*]+)\*\*\]/g, "[$1]");
-
-  cleanMd = cleanMd.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, rawText, rawUrl) => {
-    const titleText = rawText.replace(/[\*\_]/g, "").trim();
-    const url = normalizeUrl(rawUrl);
-    const href = url.startsWith("http") ? url : `https://${url}`;
-    return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="paper-link" style="color: #4f46e5; font-weight: 600; text-decoration: underline; font-size: 13px; display: inline;">${titleText} &#x2197;</a>`;
-  });
-
-  cleanMd = cleanMd.replace(/\[([^\]]+)\]/g, '<span class="citation">[$1]</span>');
-
-  let html = cleanMd
-    .replace(/^##\s+(.+)$/gm, "<h2>$1</h2>")
-    .replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-
-  const lines = html.split("\n");
-  const outputLines: string[] = [];
-  let tableLinesBuffer: string[] = [];
-
-  const flushTable = () => {
-    if (tableLinesBuffer.length === 0) return;
-
-    let headerRowIndex = 0;
-    const separatorIdx = tableLinesBuffer.findIndex((l) => l.includes("---"));
-    if (separatorIdx > 0) {
-      headerRowIndex = separatorIdx - 1;
-    }
-
-    let tHtml = '<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; border: 1px solid #cbd5e1; table-layout: auto;">';
-    let inBody = false;
-    let dataRowCounter = 0;
-
-    tableLinesBuffer.forEach((line, idx) => {
-      if (line.includes("---")) return;
-
-      const cells = line
-        .split("|")
-        .slice(1, -1)
-        .map((c) => c.trim());
-
-      if (idx === headerRowIndex && !inBody) {
-        tHtml += '<thead style="background-color: #4f46e5; color: #ffffff;"><tr>';
-        tHtml += cells
-          .map((c) => `<th style="padding: 10px 12px; border: 1px solid #3730a3; font-weight: 700; text-align: left; font-size: 12px; line-height: 1.4; color: #ffffff; background-color: #4f46e5;">${c}</th>`)
-          .join("");
-        tHtml += '</tr></thead>';
-      } else {
-        if (!inBody) {
-          inBody = true;
-          tHtml += '<tbody>';
-        }
-        dataRowCounter++;
-        const rowBg = dataRowCounter % 2 === 0 ? "#f8fafc" : "#ffffff";
-        tHtml += `<tr style="background-color: ${rowBg};">`;
-        tHtml += cells
-          .map((c) => `<td style="padding: 9px 12px; border: 1px solid #e2e8f0; color: #1e293b; vertical-align: top; font-size: 12px; line-height: 1.5; background-color: ${rowBg};">${c}</td>`)
-          .join("");
-        tHtml += '</tr>';
-      }
-    });
-
-    if (inBody) {
-      tHtml += '</tbody>';
-    }
-    tHtml += '</table>';
-    outputLines.push(tHtml);
-    tableLinesBuffer = [];
-  };
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("|")) {
-      tableLinesBuffer.push(trimmed);
-    } else if (tableLinesBuffer.length > 0 && trimmed === "") {
-      continue;
-    } else {
-      flushTable();
-      if (trimmed.startsWith("<h2>") && trimmed.endsWith("</h2>")) {
-        outputLines.push(`<h2 style="font-size: 18px; font-weight: 800; color: #111827; margin-top: 24px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #6366f1;">${trimmed.slice(4, -5)}</h2>`);
-      } else if (trimmed.match(/^(\d+\.\s+(Literature Summary|Trend Detection|Common Methods|Limitations|Contradictions|Research Gaps|Future Directions|Novel Paper Suggestions))/i)) {
-        outputLines.push(`<h2 style="font-size: 18px; font-weight: 800; color: #111827; margin-top: 24px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #6366f1;">${trimmed}</h2>`);
-      } else if (trimmed.match(/^\d+\.\s+/)) {
-        outputLines.push(`<p style="font-size: 13.5px; line-height: 1.65; color: #374151; margin-bottom: 8px; font-weight: 600; padding-left: 12px;">${trimmed}</p>`);
-      } else if (!trimmed.match(/^(---|---|\|\-\-+|\*\*\*)$/)) {
-        outputLines.push(trimmed ? `<p style="font-size: 13.5px; line-height: 1.65; color: #374151; margin-bottom: 12px;">${trimmed}</p>` : "");
-      }
-    }
-  }
-
-  flushTable();
-  return outputLines.join("");
+async function renderMarkdownToHtmlString(markdown: string): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  // Reuse React's escaped text/attribute rendering and the existing HTTP(S) link policy.
+  return renderToStaticMarkup(<FormattedBlock text={sanitizeReportMarkdown(markdown)} />);
 }
-

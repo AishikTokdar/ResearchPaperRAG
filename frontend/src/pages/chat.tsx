@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useReducedMotion } from "framer-motion";
 import {
   Search,
   Upload,
@@ -17,19 +18,20 @@ import {
   RotateCcw,
   Sliders,
   Layers,
-  Filter,
   Check,
-  Circle,
-  CheckCircle2,
   Trash2,
   X,
 } from "lucide-react";
 import { PageWrapper, SectionWrapper } from "@/components/layout/page-wrapper";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { resetChatApiSessionId } from "@/lib/chat-session";
+import { MAX_FILE_SIZE } from "@/lib/constants";
 import { AI_MODELS, type AIModel, type FetchedPaper } from "@/types";
 import { toast } from "sonner";
 import { ReportRenderer, FormattedBlock } from "@/components/chat/report-renderer";
+import { AnalysisProgressPanel, ReportGenerationPreview } from "@/components/chat/analysis-progress-panel";
+import { INITIAL_ANALYSIS_PROGRESS, mergeAnalysisProgress, type AnalysisProgress, type AnalysisStatus } from "@/lib/analysis-progress";
 import { ModelSelector } from "@/components/chat/model-selector";
 
 interface ChatMessageItem {
@@ -39,59 +41,15 @@ interface ChatMessageItem {
 }
 
 const MAX_SELECTED_PAPERS = 5;
-const CURRENT_YEAR = 2026;
+const CURRENT_YEAR = new Date().getFullYear();
 const MIN_YEAR = CURRENT_YEAR - 2;
 
-const PIPELINE_STEPS = [
-  {
-    title: "Ingest & validate PDF",
-    detail: "Verify MIME, format, cumulative size (<= 50MB)",
-  },
-  {
-    title: "Extract text layer",
-    detail: "Pull text layer from document pages",
-  },
-  {
-    title: "Semantic chunking",
-    detail: "Split into overlapping segments",
-  },
-  {
-    title: "Embedding pass",
-    detail: "Vectorize chunks for similarity search",
-  },
-  {
-    title: "Vector index",
-    detail: "Update FAISS / Chroma store for retrieval",
-  },
-  {
-    title: "Session metadata",
-    detail: "Wire document id and counters",
-  },
-  {
-    title: "Handoff to synthesis",
-    detail: "RAG pipeline ready for multi-paper gap analysis",
-  },
-];
-
-function getSourceBadgeStyle(sourceApi: string): string {
-  const s = sourceApi.toLowerCase();
-  if (s.includes("arxiv")) {
-    return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20";
-  } else if (s.includes("crossref")) {
-    return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
-  } else if (s.includes("semantic")) {
-    return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
-  } else if (s.includes("openalex")) {
-    return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20";
-  } else if (s.includes("pubmed")) {
-    return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20";
-  } else if (s.includes("doaj")) {
-    return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20";
-  }
-  return "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700";
-}
 
 export function ChatPage() {
+  const reducedMotion = useReducedMotion();
+  const [searchError, setSearchError] = React.useState<string | null>(null);
+  const [searchNotice, setSearchNotice] = React.useState<string | null>(null);
+  const [hasSearched, setHasSearched] = React.useState(false);
   const [topicQuery, setTopicQuery] = React.useState(
     "Retrieval-Augmented Generation for educational chatbots"
   );
@@ -104,7 +62,20 @@ export function ChatPage() {
 
   const [activeTab, setActiveTab] = React.useState<"search" | "upload">("search");
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
-  const [activeStepIndex, setActiveStepIndex] = React.useState<number>(-1);
+  const [analysisProgress, setAnalysisProgress] = React.useState<AnalysisProgress>(INITIAL_ANALYSIS_PROGRESS);
+  const [analysisStatus, setAnalysisStatus] = React.useState<AnalysisStatus>("idle");
+  const [analysisError, setAnalysisError] = React.useState<string | null>(null);
+  const [analysisStartedAt, setAnalysisStartedAt] = React.useState<number | null>(null);
+  const [analysisFinishedAt, setAnalysisFinishedAt] = React.useState<number | null>(null);
+  const [estimatedDuration, setEstimatedDuration] = React.useState(90);
+  const [clock, setClock] = React.useState(Date.now());
+  const analysisController = React.useRef<AbortController | null>(null);
+  React.useEffect(() => () => analysisController.current?.abort(), []);
+  React.useEffect(() => {
+    if (!isAnalyzing) return;
+    const interval = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [isAnalyzing]);
   const [report, setReport] = React.useState<string | null>(null);
 
   const [chatMessages, setChatMessages] = React.useState<ChatMessageItem[]>([]);
@@ -113,8 +84,8 @@ export function ChatPage() {
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages, isAsking]);
+    chatEndRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+  }, [chatMessages, isAsking, reducedMotion]);
 
   const defaultModel = AI_MODELS.find((m) => m.isDefault) ?? AI_MODELS[0];
   const [selectedModelObj, setSelectedModelObj] = React.useState<AIModel>(defaultModel);
@@ -126,7 +97,9 @@ export function ChatPage() {
     setActiveModelObj(selectedModelObj);
     setReport(null);
     setChatMessages([]);
-    setActiveStepIndex(-1);
+    setAnalysisStatus("idle");
+    setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS);
+    setAnalysisError(null);
     toast.success(`Active AI Model Saved: ${selectedModelObj.name} (${selectedModelObj.provider.toUpperCase()}). Pipeline and chat reset for new model.`);
   };
 
@@ -137,6 +110,8 @@ export function ChatPage() {
       return;
     }
 
+    setSearchError(null);
+    setSearchNotice(null);
     setIsSearching(true);
     try {
       const res = await api.searchPapers(topicQuery.trim(), paperLimit);
@@ -149,17 +124,22 @@ export function ChatPage() {
         }
       });
 
+      const unavailable = res.source_status?.filter((source) => source.status !== "ok").map((source) => source.source) ?? [];
+      setSearchNotice(unavailable.length ? `Some sources could not be reached: ${unavailable.join(", ")}. You can use these results or try searching again.` : null);
+      setHasSearched(true);
       setFetchedPapers(recentPapers);
-      const initialSelected = new Set(recentPapers.slice(0, MAX_SELECTED_PAPERS).map((p) => p.id));
+      const initialSelected = new Set(recentPapers.slice(0, Math.max(0, MAX_SELECTED_PAPERS - uploadedFiles.length)).map((p) => p.id));
       setSelectedPaperIds(initialSelected);
 
       if (recentPapers.length > 0) {
-        toast.success(`Retrieved ${recentPapers.length} papers from last 3 years (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ).`);
+        toast.success(`Found ${recentPapers.length} papers matching your topic.`);
       } else {
-        toast.warning("No recent papers found matching the topic from 2024 to 2026.");
+        toast.warning(`No papers found matching your topic from ${MIN_YEAR} to ${CURRENT_YEAR}.`);
       }
     } catch (err) {
-      toast.error((err as Error).message || "Failed to fetch research papers.");
+      const message = (err as Error).message || "Failed to fetch research papers.";
+      setSearchError(message);
+      toast.error(message);
     } finally {
       setIsSearching(false);
     }
@@ -171,7 +151,7 @@ export function ChatPage() {
       if (next.has(id)) {
         next.delete(id);
       } else {
-        if (next.size >= MAX_SELECTED_PAPERS) {
+        if (next.size + uploadedFiles.length >= MAX_SELECTED_PAPERS) {
           toast.error(`Maximum of ${MAX_SELECTED_PAPERS} research papers can be selected for analysis.`);
           return prev;
         }
@@ -182,7 +162,7 @@ export function ChatPage() {
   };
 
   const selectTopFive = () => {
-    const topFive = fetchedPapers.slice(0, MAX_SELECTED_PAPERS).map((p) => p.id);
+    const topFive = fetchedPapers.slice(0, Math.max(0, MAX_SELECTED_PAPERS - uploadedFiles.length)).map((p) => p.id);
     setSelectedPaperIds(new Set(topFive));
   };
 
@@ -192,11 +172,22 @@ export function ChatPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const files = Array.from(e.target.files).filter((f) => f.name.endsWith(".pdf"));
-    if (files.length > 0) {
-      setUploadedFiles((prev) => [...prev, ...files].slice(0, MAX_SELECTED_PAPERS));
+    const files = Array.from(e.target.files);
+    if (files.some((file) => !file.name.toLowerCase().endsWith(".pdf"))) {
+      toast.error("Please choose PDF files only.");
+      e.target.value = "";
+      return;
+    }
+    const combined = [...uploadedFiles, ...files];
+    if (combined.length + selectedPaperIds.size > MAX_SELECTED_PAPERS) {
+      toast.error(`Choose at most ${MAX_SELECTED_PAPERS} papers and PDFs combined.`);
+    } else if (combined.reduce((size, file) => size + file.size, 0) > MAX_FILE_SIZE) {
+      toast.error("Combined PDFs must be no larger than 50 MB.");
+    } else if (files.length) {
+      setUploadedFiles(combined);
       toast.success(`Attached ${files.length} custom PDF document(s).`);
     }
+    e.target.value = "";
   };
 
   const handleRemoveFile = (index: number) => {
@@ -217,6 +208,7 @@ export function ChatPage() {
   const totalActivePapers = selectedFetchedPapers.length + uploadedFiles.length;
 
   const handleRunAnalysis = async () => {
+    if (analysisController.current || isSearching || isAsking) return;
     if (totalActivePapers === 0) {
       toast.error("Please select at least one paper before running analysis.");
       return;
@@ -230,49 +222,43 @@ export function ChatPage() {
     setChatMessages([]);
     setChatInput("");
     setIsAnalyzing(true);
-    setActiveStepIndex(0);
-
+    const controller = new AbortController();
+    analysisController.current = controller;
+    const started = Date.now();
+    setAnalysisStartedAt(started);
+    setAnalysisFinishedAt(null);
+    setClock(started);
+    setEstimatedDuration(45 + totalActivePapers * 12 + uploadedFiles.reduce((bytes, file) => bytes + file.size, 0) / 1048576);
+    setAnalysisStatus("running");
+    setAnalysisError(null);
+    setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS);
     try {
-      if (uploadedFiles.length > 0) {
-        await api.uploadPDFs(uploadedFiles);
-      }
-      setActiveStepIndex(1);
-      await new Promise((r) => setTimeout(r, 450));
-
-      setActiveStepIndex(2);
-      await new Promise((r) => setTimeout(r, 450));
-
-      setActiveStepIndex(3);
-      if (selectedFetchedPapers.length > 0) {
-        await api.ingestPapers(selectedFetchedPapers.slice(0, MAX_SELECTED_PAPERS));
-      }
-      
-      setActiveStepIndex(4);
-      await new Promise((r) => setTimeout(r, 400));
-
-      setActiveStepIndex(5);
-      await new Promise((r) => setTimeout(r, 400));
-
-      setActiveStepIndex(6);
-      const res = await api.analyzeGaps(
-        topicQuery || "Research Paper Analysis",
-        activeModelObj.provider,
-        activeModelObj.id
-      );
-
-      setActiveStepIndex(7);
-      setReport(res.report);
-      toast.success("Research paper analysis and gap report generated.");
+      const result = await api.runAnalysis({
+        topic: topicQuery.trim() || "Research Paper Analysis",
+        provider: activeModelObj.provider,
+        model: activeModelObj.id,
+        paperIds: selectedFetchedPapers.map(({ id }) => id),
+        files: uploadedFiles,
+      }, (update) => setAnalysisProgress((current) => mergeAnalysisProgress(current, update)), controller.signal);
+      setAnalysisProgress((current) => ({ ...mergeAnalysisProgress(current, result.progress), stage: "complete", percent: 100 }));
+      setAnalysisStatus("complete");
+      setReport(result.report);
+      toast.success(result.progress.limited ? "Report ready with limited source evidence." : "Research paper analysis and gap report generated.");
     } catch (err) {
-      toast.error((err as Error).message || "Failed to generate research report.");
+      const message = controller.signal.aborted ? "Analysis stopped. You can run it again when ready." : (err as Error).message || "Failed to generate research report.";
+      setAnalysisStatus("error");
+      setAnalysisError(message);
+      if (!controller.signal.aborted) toast.error(message);
     } finally {
+      setAnalysisFinishedAt(Date.now());
       setIsAnalyzing(false);
+      analysisController.current = null;
     }
   };
 
   const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isAsking) return;
+    if (!chatInput.trim() || isAsking || isAnalyzing || !report) return;
 
     const q = chatInput.trim();
     setChatInput("");
@@ -297,38 +283,46 @@ export function ChatPage() {
   };
 
   const handleClearSession = () => {
+    resetChatApiSessionId();
+    setSearchNotice(null);
     setFetchedPapers([]);
     setSelectedPaperIds(new Set());
     setUploadedFiles([]);
     setReport(null);
     setChatMessages([]);
-    setActiveStepIndex(-1);
+    setAnalysisStatus("idle");
+    setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS);
+    setAnalysisError(null);
+    setSearchError(null);
+    setHasSearched(false);
     toast.info("Session reset.");
   };
 
   return (
     <PageWrapper showBackground showFooter className="w-full min-h-screen">
-      <SectionWrapper className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-semibold uppercase tracking-wider">
-            <Filter className="w-3.5 h-3.5" /> Multi-Source Academic Retrieval & Gap Analysis
+      <SectionWrapper className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="workspace-heading flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div className="max-w-2xl space-y-3">
+            <p className="section-kicker">Research workspace</p>
+            <h1 className="plain-heading text-3xl font-semibold tracking-tight sm:text-4xl">Research Gap Analyzer</h1>
+            <p className="max-w-xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">Choose your sources, read the analysis, and follow the questions it raises.</p>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight">
-            Research Gap Analyzer
-          </h1>
-          <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto text-sm sm:text-base">
-            Search 6 free academic sources (arXiv, Crossref, Semantic Scholar, OpenAlex, PubMed, DOAJ), filter recent 3-year publications, select up to 5 papers, and synthesize structured 8-layer research insights.
-          </p>
+          <nav aria-label="Workspace sections" className="workspace-jumps">
+            <a href="#sources" aria-current={!report && !isAnalyzing ? "step" : undefined}>Sources</a>
+            <a href="#report" aria-current={isAnalyzing || report ? "step" : undefined}>Report</a>
+            <a href="#follow-up">Follow-up</a>
+          </nav>
         </div>
 
-        <div className="p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div className="workspace-toolbar p-3 sm:p-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm flex-1 min-w-0">
             <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 shrink-0">
-              <Sliders className="w-4 h-4 text-indigo-500" /> Select AI Model:
+              <Sliders className="w-4 h-4 text-indigo-500" /> Analysis model
             </span>
             
-            <div className="w-full sm:w-72 md:w-80">
+            <div className="w-full min-w-0 sm:w-72 md:w-80">
               <ModelSelector
+                disabled={isAnalyzing || isAsking}
                 value={selectedModelObj.id}
                 onChange={(m) => setSelectedModelObj(m)}
               />
@@ -337,90 +331,72 @@ export function ChatPage() {
             <Button
               type="button"
               size="sm"
+              disabled={isAnalyzing || isAsking}
               onClick={handleSaveModel}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs text-xs px-4"
+              variant="outline" className="gap-1.5 px-4"
             >
               <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Save Model
             </Button>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 text-xs font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span>Active Model: <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{activeModelObj.name}</strong> ({activeModelObj.provider.toUpperCase()})</span>
-            </div>
+            <p className="text-xs text-[var(--text-muted)]">In use: <strong className="font-medium text-[var(--text-main)]">{activeModelObj.name}</strong>{selectedModelObj.id !== activeModelObj.id && <span className="ml-2">Save to apply your selection.</span>}</p>
           </div>
 
-          <Button variant="outline" size="sm" onClick={handleClearSession} className="gap-1.5 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 border-zinc-300 dark:border-zinc-700 shrink-0">
+          <Button variant="outline" size="sm" disabled={isAnalyzing || isAsking || isSearching} onClick={handleClearSession} className="gap-1.5 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 border-zinc-300 dark:border-zinc-700 shrink-0">
             <RotateCcw className="w-3.5 h-3.5" /> Clear Session
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-5 space-y-6">
-            <div className="flex rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+          <div id="sources" className="min-w-0 lg:col-span-5 xl:col-span-4 space-y-5">
+            <fieldset hidden={isAnalyzing} disabled={isAnalyzing || isAsking} className="min-w-0 space-y-5 disabled:opacity-60">
+            <div className="source-tabs" role="group" aria-label="Source input method">
               <button
                 type="button"
                 onClick={() => setActiveTab("search")}
-                className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                  activeTab === "search"
-                    ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                }`}
+                aria-pressed={activeTab === "search"}
+                aria-controls="source-input-panel"
               >
                 <Search className="w-4 h-4" /> Academic Search
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("upload")}
-                className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                  activeTab === "upload"
-                    ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                }`}
+                aria-pressed={activeTab === "upload"}
+                aria-controls="source-input-panel"
               >
                 <Upload className="w-4 h-4" /> Upload PDFs
               </button>
             </div>
 
             {activeTab === "search" && (
-              <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
-                    <span>Search Sources (6 Free APIs):</span>
-                    <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-[10px] font-semibold border border-indigo-500/20">
-                      Last 3 Years (2024-2026)
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
-                    <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">arXiv</span>
-                    <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">Crossref</span>
-                    <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">Semantic Scholar</span>
-                    <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">OpenAlex</span>
-                    <span className="px-2 py-0.5 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">PubMed</span>
-                    <span className="px-2 py-0.5 rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">DOAJ</span>
-                  </div>
-                </div>
-
+              <div id="source-input-panel" className="workspace-panel p-5 space-y-4">
+                <div><h2 className="text-base font-semibold">Find your sources</h2><p className="mt-1 text-xs leading-6 text-[var(--text-muted)]">Recent papers from {MIN_YEAR}–{CURRENT_YEAR} across six academic sources.</p></div>
                 <form onSubmit={handleSearch} className="space-y-3">
-                  <div className="relative">
+                  <div className="relative space-y-2">
+                    <label htmlFor="research-topic" className="workspace-label">Research topic or question</label>
                     <input
+                      id="research-topic"
                       type="text"
+                      aria-label="Research topic"
                       value={topicQuery}
                       onChange={(e) => setTopicQuery(e.target.value)}
+                      maxLength={500}
                       placeholder="Enter research topic or question..."
                       className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                     />
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-zinc-500">
-                    <span>Results limit per API:</span>
+                    <label htmlFor="results-limit">Results per source</label>
                     <select
+                      id="results-limit" aria-label="Results per academic source"
                       value={paperLimit}
                       onChange={(e) => setPaperLimit(Number(e.target.value))}
                       className="bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500"
                     >
-                      <option value={2}>2 papers per API</option>
-                      <option value={3}>3 papers per API</option>
-                      <option value={4}>4 papers per API</option>
+                      <option value={2}>2 papers</option>
+                      <option value={3}>3 papers</option>
+                      <option value={4}>4 papers</option>
                     </select>
                   </div>
 
@@ -430,16 +406,21 @@ export function ChatPage() {
                   </Button>
                 </form>
 
+                <p className="text-xs leading-6 text-[var(--text-muted)]">arXiv · Crossref · Semantic Scholar · OpenAlex · PubMed · DOAJ</p>
+                {isSearching && <p role="status" className="text-sm text-[var(--text-muted)]">Searching the academic sources. Results will appear here.</p>}
+                {searchNotice && <p role="status" className="rounded-lg border border-border p-3 text-sm text-muted-foreground">{searchNotice}</p>}
+                {searchError && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{searchError} Your previous selections are still available. Try searching again.</p>}
+                {hasSearched && !isSearching && !searchError && fetchedPapers.length === 0 && <p role="status" className="border-t border-[var(--border-color)] pt-4 text-sm text-[var(--text-muted)]">No recent papers matched this topic. Try a broader question or upload your PDFs.</p>}
                 {fetchedPapers.length > 0 && (
                   <div className="space-y-3 pt-2">
                     <div className="flex items-center justify-between text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                       <span>Fetched Papers ({fetchedPapers.length})</span>
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={selectTopFive} className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
+                        <button type="button" onClick={selectTopFive} className="min-h-8 text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
                           Select Top 5
                         </button>
                         <span>|</span>
-                        <button type="button" onClick={deselectAll} className="text-zinc-400 hover:underline">
+                        <button type="button" onClick={deselectAll} className="min-h-8 text-zinc-500 dark:text-zinc-400 hover:underline">
                           Deselect All
                         </button>
                       </div>
@@ -461,8 +442,10 @@ export function ChatPage() {
                             <div className="flex items-start gap-2.5">
                               <button
                                 type="button"
+                                aria-label={`${isSelected ? "Deselect" : "Select"} ${paper.title}`}
+                                aria-pressed={isSelected}
                                 onClick={() => togglePaperSelection(paper.id)}
-                                className="mt-0.5 hover:scale-105 transition-transform"
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded"
                               >
                                 {isSelected ? (
                                   <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -475,7 +458,7 @@ export function ChatPage() {
                                   href={paper.url || paper.pdf_url || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="font-semibold text-zinc-900 dark:text-zinc-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline leading-snug flex items-center gap-1 group"
+                                  className="min-h-6 text-sm font-semibold text-zinc-900 dark:text-zinc-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline leading-snug flex items-center gap-1 group"
                                 >
                                   {paper.title} ({paper.year})
                                   <ExternalLink className="w-3 h-3 text-zinc-400 group-hover:text-indigo-500 shrink-0 inline" />
@@ -484,14 +467,14 @@ export function ChatPage() {
                                   Authors: {paper.authors}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${getSourceBadgeStyle(paper.source_api)}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono border source-badge`}>
                                     {paper.source_api}
                                   </span>
                                   <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[10px]">
                                     {paper.year}
                                   </span>
                                   {paper.is_open_access && (
-                                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
                                       Open Access
                                     </span>
                                   )}
@@ -500,7 +483,9 @@ export function ChatPage() {
                               <button
                                 type="button"
                                 onClick={() => setExpandedPaperId(isExpanded ? null : paper.id)}
-                                className="p-1 text-zinc-400 hover:text-zinc-200"
+                                aria-label={`${isExpanded ? "Hide" : "Show"} abstract for ${paper.title}`}
+                                aria-expanded={isExpanded}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                               >
                                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                               </button>
@@ -521,23 +506,24 @@ export function ChatPage() {
             )}
 
             {activeTab === "upload" && (
-              <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              <div id="source-input-panel" className="workspace-panel p-5 space-y-4">
+                <label htmlFor="research-pdfs" className="workspace-label">
                   Upload Custom Research Papers (PDF)
                 </label>
                 <div className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl p-6 text-center hover:border-indigo-500/50 transition-colors cursor-pointer relative bg-zinc-50 dark:bg-zinc-950/50">
                   <input
+                    id="research-pdfs"
                     type="file"
                     accept=".pdf"
                     multiple
                     onChange={handleFileChange}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full focus-visible:opacity-100"
                   />
                   <Upload className="w-8 h-8 mx-auto text-indigo-500/70 mb-2" />
                   <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    Click or drag & drop PDF papers
+                    Choose PDFs or drop them here
                   </p>
-                  <p className="text-xs text-zinc-400 mt-1">Maximum 5 documents for analysis</p>
+                  <p className="text-xs text-zinc-400 mt-1">Up to 5 papers · 50 MB total</p>
                 </div>
 
                 {uploadedFiles.length > 0 && (
@@ -564,8 +550,9 @@ export function ChatPage() {
                             <button
                               type="button"
                               onClick={() => handleRemoveFile(i)}
-                              className="p-1 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                              className="flex h-8 w-8 items-center justify-center text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                               title="Remove PDF"
+                              aria-label={`Remove ${file.name}`}
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -578,12 +565,14 @@ export function ChatPage() {
               </div>
             )}
 
-            <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4 font-sans">
+            </fieldset>
+
+            <div className="workspace-panel p-5 sm:p-6 text-zinc-900 dark:text-zinc-100 space-y-4 font-sans">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
-                    <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> Active Knowledge Base
-                  </h3>
+                  <h2 className="text-base font-semibold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                    <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> Selected sources
+                  </h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Selected papers ({totalActivePapers} / {MAX_SELECTED_PAPERS} max)
                   </p>
@@ -593,76 +582,61 @@ export function ChatPage() {
 
               <Button
                 onClick={handleRunAnalysis}
-                disabled={isAnalyzing || totalActivePapers === 0 || totalActivePapers > MAX_SELECTED_PAPERS}
-                className="w-full py-5 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md gap-2"
+                disabled={isAnalyzing || isSearching || isAsking || totalActivePapers === 0 || totalActivePapers > MAX_SELECTED_PAPERS}
+                className="w-full h-auto min-h-11 whitespace-normal py-3 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md gap-2"
               >
                 {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
                 {isAnalyzing ? "Analyzing Papers..." : "Run Multi-Paper Gap Analysis"}
               </Button>
 
-              <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
-                  Pipeline Processing Steps
-                </p>
-                {PIPELINE_STEPS.map((step, i) => {
-                  const isCompleted = isAnalyzing ? activeStepIndex > i : (report !== null || activeStepIndex > i);
-                  const isCurrent = activeStepIndex === i && isAnalyzing;
-
-                  return (
-                    <div key={i} className="flex items-start gap-2.5 text-xs">
-                      <div className="mt-0.5 shrink-0">
-                        {isCompleted ? (
-                          <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
-                        ) : isCurrent ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
-                        ) : (
-                          <Circle className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-600" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className={`font-semibold font-mono leading-tight ${isCompleted ? "text-zinc-900 dark:text-zinc-100" : isCurrent ? "text-indigo-600 dark:text-indigo-300" : "text-zinc-400 dark:text-zinc-500"}`}>
-                          {step.title}
-                        </div>
-                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono leading-tight mt-0.5 truncate">
-                          {step.detail}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {isAnalyzing && <Button variant="outline" className="w-full" onClick={() => analysisController.current?.abort()}>Stop analysis</Button>}
+              <AnalysisProgressPanel
+                progress={analysisProgress} status={analysisStatus} error={analysisError}
+                elapsed={analysisStartedAt ? Math.max(0, ((analysisFinishedAt ?? clock) - analysisStartedAt) / 1000) : 0}
+                baseline={estimatedDuration}
+              />
             </div>
 
           </div>
 
-          <div className="lg:col-span-7 space-y-6">
-            <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4 min-h-[400px]">
+          <div className="workspace-report min-w-0 lg:col-span-7 xl:col-span-8 space-y-6">
+            <div id="report" className="workspace-panel p-5 sm:p-8 space-y-4">
               {report ? (
                 <ReportRenderer report={report} topic={topicQuery} />
+              ) : analysisStatus === "running" || analysisStatus === "error" ? (
+                <ReportGenerationPreview progress={analysisProgress} status={analysisStatus} error={analysisError} />
               ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-center text-zinc-400 space-y-3">
-                  <BookOpen className="w-10 h-10 stroke-1 text-indigo-500 opacity-40" />
-                  <p className="text-sm font-medium">No analysis generated yet.</p>
-                  <p className="text-xs text-zinc-500 max-w-md">
-                    Search academic sources, select up to 5 research papers from the last 3 years, and click &ldquo;Run Multi-Paper Gap Analysis&rdquo;.
-                  </p>
+                <div className="workspace-empty py-3 sm:py-5">
+                  <p className="section-kicker">Your reading desk</p><h2 className="editorial-title text-3xl sm:text-4xl">Start with the sources.</h2>
+                  <p className="mt-5 max-w-lg text-sm leading-7 text-[var(--text-muted)]">Search for a topic or upload your PDFs. Choose up to five papers, then run the analysis to compare their findings.</p>
+                  <div className="mt-8 grid gap-5 border-y border-[var(--border-color)] py-5 sm:grid-cols-2">
+                    <div><h3 className="text-sm font-semibold">While the report is written</h3><p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">Follow the processing stages, sections being drafted, and estimated time remaining.</p></div>
+                    <div><h3 className="text-sm font-semibold">When it is ready</h3><p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">Read all eight sections, check the citations, and export the report or ask a follow-up.</p></div>
+                  </div>
+                  <p className="mt-5 text-xs leading-6 text-[var(--text-muted)]">The quality of the report depends on the evidence available in your papers. Check the original sources as you review the findings.</p>
                 </div>
               )}
             </div>
 
-            <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
+            <div id="follow-up" className="workspace-panel p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-indigo-500" /> Grounded Interactive Follow-up Chat
-                </h3>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-indigo-500" /> Follow-up questions
+                </h2>
                 {chatMessages.length > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setChatMessages([]);
-                      setChatInput("");
-                      toast.info("Follow-up chat history cleared.");
+                    disabled={isAsking || isAnalyzing}
+                    onClick={async () => {
+                      try {
+                        await api.clearFollowup();
+                        setChatMessages([]);
+                        setChatInput("");
+                        toast.info("Follow-up chat history cleared.");
+                      } catch {
+                        toast.error("Chat history could not be cleared. Please retry.");
+                      }
                     }}
                     className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 gap-1"
                   >
@@ -671,13 +645,13 @@ export function ChatPage() {
                 )}
               </div>
               <p className="text-xs text-zinc-500">
-                Ask follow-up questions regarding common methods, contradictions, or research gaps. Answers cite exact papers and sections.
+                Ask about the methods, contradictions, or gaps in your sources. Review citations alongside the answers.
               </p>
 
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                 {chatMessages.length === 0 && !isAsking ? (
                   <div className="text-center py-6 text-xs text-zinc-400 italic">
-                    Example: &ldquo;Which contradiction between paper 1 and paper 2 requires further dataset benchmarking?&rdquo;
+                    {report ? "Try asking: Which limitations are shared across these studies?" : "Generate a report to start asking questions about your sources."}
                   </div>
                 ) : (
                   <>
@@ -720,8 +694,8 @@ export function ChatPage() {
                           <Bot className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                         </div>
                         <div className="px-4 py-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-800/90 rounded-bl-none border border-zinc-200 dark:border-zinc-700 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce [animation-delay:-0.3s]" />
-                          <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce [animation-delay:-0.15s]" />
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce motion-reduce:animate-none [animation-delay:-0.3s]" />
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce motion-reduce:animate-none [animation-delay:-0.15s]" />
                           <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-bounce" />
                         </div>
                       </div>
@@ -731,15 +705,20 @@ export function ChatPage() {
                 )}
               </div>
 
+              <label htmlFor="follow-up-question" className="workspace-label">Your question</label>
               <form onSubmit={handleSendChat} className="flex gap-2">
                 <input
                   type="text"
+                  id="follow-up-question"
+                  disabled={isAnalyzing || isAsking || !report}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
+                  aria-label="Follow-up question"
+                  maxLength={2000}
                   placeholder="Ask a follow-up question..."
                   className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 />
-                <Button type="submit" disabled={isAsking || !chatInput.trim()} className="gap-1 bg-indigo-600 hover:bg-indigo-700 text-white">
+                <Button type="submit" aria-label="Send follow-up question" disabled={isAnalyzing || isAsking || !report || !chatInput.trim()} className="gap-1 bg-indigo-600 hover:bg-indigo-700 text-white">
                   {isAsking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </Button>
               </form>
@@ -751,7 +730,7 @@ export function ChatPage() {
   );
 }
 
-function intVal(val: any): number {
+function intVal(val: unknown): number {
   try {
     const parsed = parseInt(String(val).trim().slice(0, 4), 10);
     return isNaN(parsed) ? CURRENT_YEAR : parsed;

@@ -28,7 +28,7 @@ import { ModelSelector } from "./model-selector";
 import { usePDFUpload } from "@/hooks/use-pdf-upload";
 import { useChat } from "@/hooks/use-chat";
 import { api } from "@/lib/api";
-import { AI_MODELS, type AIModel, type ChatEntry } from "@/types";
+import { AI_MODELS, DEFAULT_MODEL_ID, type AIModel, type ChatEntry } from "@/types";
 import {
   loadPreference,
   savePreference,
@@ -44,7 +44,7 @@ import { getChatEntryReactKey } from "@/lib/chat-history";
 import { ConfirmAlertDialog } from "@/components/ui/confirm-alert-dialog";
 import { SESSION_INDEX_RETENTION_DAYS } from "@/lib/session-retention";
 
-const DEFAULT_CHAT_MODEL_ID = "gemini-3.6-flash";
+const DEFAULT_CHAT_MODEL_ID = DEFAULT_MODEL_ID;
 
 function exportAsTXT(chatHistory: ChatEntry[], activeSessionName?: string) {
   if (chatHistory.length === 0) return;
@@ -216,13 +216,13 @@ export function ChatContainer() {
   const [selectedModel, setSelectedModel] = React.useState(() =>
     loadPreference<string>(prefKeys.SELECTED_MODEL, DEFAULT_CHAT_MODEL_ID),
   );
-  const [_modelMeta, setModelMeta] = React.useState(() => {
+  const [, setModelMeta] = React.useState(() => {
     const id = loadPreference<string>(prefKeys.SELECTED_MODEL, DEFAULT_CHAT_MODEL_ID);
     const m = AI_MODELS.find((x) => x.id === id) ?? AI_MODELS[0];
     return { name: m.name, provider: m.provider };
   });
   const [includeSources, setIncludeSources] = React.useState(true);
-  const [hybridMode, setHybridMode] = React.useState(true);
+  const [hybridMode, setHybridMode] = React.useState(false);
   const [useStreaming, setUseStreaming] = React.useState(() =>
     loadPreference<boolean>(prefKeys.STREAMING_ENABLED, true),
   );
@@ -283,13 +283,17 @@ export function ChatContainer() {
     }
   }, [chatHistory, activeSessionName, fileName]);
 
+  const latestHistoryRef = React.useRef(chatHistory);
+  React.useEffect(() => { latestHistoryRef.current = chatHistory; }, [chatHistory]);
   React.useEffect(() => {
-    if (fileName && isLoaded && chatHistory.length === 0) {
+    let cancelled = false;
+    if (fileName && isLoaded && latestHistoryRef.current.length === 0) {
       loadChatSession(fileName).then((saved) => {
-        if (saved.length > 0) setChatHistory(saved);
+        if (!cancelled && saved.length > 0 && latestHistoryRef.current.length === 0) setChatHistory(saved);
       });
     }
-  }, [fileName, isLoaded]);
+    return () => { cancelled = true; };
+  }, [fileName, isLoaded, setChatHistory]);
 
   React.useEffect(() => {
     listChatSessions().then(setSessions);

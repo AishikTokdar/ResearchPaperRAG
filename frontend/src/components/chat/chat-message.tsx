@@ -1,3 +1,4 @@
+import { stripProcessingNotices } from "@/lib/processing-notices";
 import * as React from "react";
 import { User, Bot, Copy, Check, FileText, Cpu, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -201,7 +202,7 @@ export function FormattedMessageContent({ content }: { content: string }) {
 
 export function ChatMessage({
   role,
-  content,
+  content: rawContent,
   timestamp,
   isLatest: _isLatest = false,
   index: _index = 0,
@@ -211,6 +212,7 @@ export function ChatMessage({
   const [copied, setCopied] = React.useState(false);
   const [sourcesOpen, setSourcesOpen] = React.useState(false);
   const isUser = role === "user";
+  const content = isUser ? rawContent : stripProcessingNotices(rawContent);
 
   const handleCopy = async () => {
     try {
