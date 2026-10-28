@@ -1,4 +1,4 @@
-# Full-Stack ResearchPaperRAG Dockerfile for Local, Hugging Face Spaces & Cloud Deployment
+# ResearchPaperRAG API image built from the repository root
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,7 +16,9 @@ RUN apt-get update \
 
 # Install Python requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements-api.txt backend/requirements-api.txt
+RUN pip install --no-cache-dir "torch>=2.6,<3" --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Copy project source code
 COPY . .
@@ -34,4 +36,4 @@ EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request,os; p=os.environ.get('PORT','7860'); urllib.request.urlopen('http://127.0.0.1:'+p+'/health')" || exit 1
 
-CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-7860} --proxy-headers"]
+CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-7860} --no-proxy-headers --workers 1 --timeout-keep-alive 5 --timeout-graceful-shutdown 40"]

@@ -1,10 +1,10 @@
 # Stage 1: Build React SPA
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci
 
 COPY . .
 
@@ -14,9 +14,10 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
 # Stage 2: Serve via Nginx
-FROM nginx:alpine
+FROM nginx:1.30-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx-proxy.conf /etc/nginx/proxy_params_rag
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
