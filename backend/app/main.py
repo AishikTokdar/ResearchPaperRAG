@@ -68,21 +68,16 @@ def print_startup_api_key_status():
     provider_names = [
         ("gemini", "Google Gemini"),
         ("groq", "Groq"),
-        ("cerebras", "Cerebras"),
         ("sambanova", "SambaNova"),
-        ("huggingface", "Hugging Face"),
         ("openrouter", "OpenRouter"),
+        ("huggingface", "Hugging Face (Embeddings)"),
     ]
     for pname, display_name in provider_names:
         keys = get_all_provider_api_keys(pname)
-        if len(keys) == 0:
-            print(f"API Key status for {display_name}: NOT SET")
-        elif len(keys) == 1:
-            print(f"API Key status for {display_name}: CONFIGURED (1 key)")
-        else:
-            print(
-                f"API Key status for {display_name}: MULTIPLE KEYS SETUP ({len(keys)} keys configured)"
-            )
+        count = len(keys)
+        status_label = "CONFIGURED" if count > 0 else "NOT CONFIGURED"
+        key_label = f"({count} {'key' if count == 1 else 'keys'})"
+        print(f"API Key status for {display_name}: {status_label} {key_label}")
 
 
 @asynccontextmanager
@@ -161,7 +156,7 @@ This service supports multi-document PDF indexing, local zero-key CPU embeddings
 * **Research Gap Analyzer** (`POST /api/papers/search`, `/api/analyze/gaps`): Fetch papers via free academic APIs & run cross-paper RAG gap analysis.
 * **Real-Time Streaming** (`POST /ask/stream`): Server-Sent Events (SSE) token-by-token streaming responses.
 * **JSON Query** (`POST /ask`): Non-streaming JSON answer with source citations.
-* **Multi-Model Support** (`GET /models`): Configured catalog models across Google Gemini, Groq, Cerebras, SambaNova, Hugging Face, and OpenRouter.
+* **Multi-Model Support** (`GET /models`): Configured catalog models across Google Gemini, Groq, SambaNova, and OpenRouter.
 * **Knowledge Modes**: `Hybrid Brain` (synthesized world knowledge) vs `Strict to Source` (strict document citations).
 """).strip()
 

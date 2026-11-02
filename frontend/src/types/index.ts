@@ -165,9 +165,7 @@ export interface ChatFollowupResponse {
 export type AIProvider =
   | "gemini"
   | "groq"
-  | "cerebras"
   | "sambanova"
-  | "huggingface"
   | "openrouter";
 
 export interface AIModel {

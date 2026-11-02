@@ -1,5 +1,5 @@
 import modelCatalog from "@/lib/model-catalog.json";
-import { Globe, Sparkles, Library, Cpu, Layers, Zap } from "lucide-react";
+import { Globe, Sparkles, Layers, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SpotlightCard } from "@/components/ui/spotlight-card";
 import { Badge } from "@/components/ui/badge";
@@ -13,13 +13,13 @@ type ProviderBlock = {
   badge: string;
 };
 
-const icons: Record<string, LucideIcon> = { gemini: Sparkles, groq: Zap, cerebras: Cpu, sambanova: Layers, huggingface: Library, openrouter: Globe };
-const labels: Record<string, string> = { gemini: "Google Gemini", groq: "Groq", cerebras: "Cerebras", sambanova: "SambaNova", huggingface: "Hugging Face", openrouter: "OpenRouter" };
+const icons: Record<string, LucideIcon> = { gemini: Sparkles, groq: Zap, sambanova: Layers, openrouter: Globe };
+const labels: Record<string, string> = { gemini: "Google Gemini", groq: "Groq", sambanova: "SambaNova", openrouter: "OpenRouter" };
 const providers: ProviderBlock[] = modelCatalog.providers.map(provider => ({
-  name: labels[provider.name], icon: icons[provider.name],
-  description: provider.access_tier === "free" ? "Free API tier, subject to account eligibility and quotas." : provider.access_tier === "trial" ? "Trial credits. Requires an explicit server opt-in; excluded from free fallback." : "Purchased credits. Requires an explicit server opt-in; excluded from free fallback.",
+  name: labels[provider.name] || provider.name, icon: icons[provider.name] || Globe,
+  description: "Free API tier, subject to account eligibility and quotas.",
   models: provider.models.map(model => model.name),
-  badge: provider.access_tier === "free" ? "Free tier" : provider.access_tier === "trial" ? "Trial" : "Credits",
+  badge: "Free tier",
 }));
 
 export function ModelsSection() {
@@ -31,7 +31,7 @@ export function ModelsSection() {
           Supported AI Models &amp; Providers
         </h2>
         <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
-          Four providers with documented free API tiers, plus two optional credit-based integrations. The workspace shows which are configured on this server.
+          Four providers with documented free API tiers (Gemini, Groq, SambaNova, OpenRouter). The workspace shows which are configured on this server.
         </p>
       </div>
 

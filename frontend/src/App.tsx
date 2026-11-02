@@ -2,8 +2,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { Sentry } from "@/lib/sentry";
 import { ThemeProvider } from "@/context/theme-context";
+import { HealthProvider } from "@/context/health-context";
 import { ChatProvider } from "@/context/chat-context";
 import { ScrollToTop } from "@/components/layout/scroll-to-top";
+import { BackendOfflineBanner } from "@/components/layout/backend-offline-banner";
 import { HomePage } from "@/pages/home";
 import { ChatPage } from "@/pages/chat";
 import { ApiStatusPage } from "@/pages/api-status";
@@ -34,23 +36,26 @@ function App() {
   return (
     <Sentry.ErrorBoundary fallback={<AppFallback />}>
       <ThemeProvider>
-        <BrowserRouter>
-          <GlobalBackground />
-          <TooltipProvider delayDuration={350}>
-            <Toaster />
-            <ScrollToTop />
-            <ChatProvider>
-              <AnimatePresence mode="wait">
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/chat" element={<ChatPage />} />
-                  <Route path="/api-status" element={<ApiStatusPage />} />
-                  <Route path="*" element={<HomePage />} />
-                </Routes>
-              </AnimatePresence>
-            </ChatProvider>
-          </TooltipProvider>
-        </BrowserRouter>
+        <HealthProvider>
+          <BrowserRouter>
+            <GlobalBackground />
+            <TooltipProvider delayDuration={350}>
+              <Toaster />
+              <ScrollToTop />
+              <BackendOfflineBanner />
+              <ChatProvider>
+                <AnimatePresence mode="wait">
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/api-status" element={<ApiStatusPage />} />
+                    <Route path="*" element={<HomePage />} />
+                  </Routes>
+                </AnimatePresence>
+              </ChatProvider>
+            </TooltipProvider>
+          </BrowserRouter>
+        </HealthProvider>
       </ThemeProvider>
     </Sentry.ErrorBoundary>
   );

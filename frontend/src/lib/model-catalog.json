@@ -112,41 +112,6 @@
           "preview": false
         }
       ]
-    },
-    {
-      "name": "cerebras",
-      "base_url": "https://api.cerebras.ai/v1",
-      "api_key_env": "CEREBRAS_API_KEY",
-      "access_tier": "trial",
-      "documentation_url": "https://www.cerebras.ai/pricing",
-      "embedding_model": null,
-      "models": [
-        {
-          "id": "qwen-3.8-27b",
-          "name": "Qwen 3.8 27B",
-          "preview": false
-        }
-      ]
-    },
-    {
-      "name": "huggingface",
-      "base_url": "https://router.huggingface.co/v1",
-      "api_key_env": "HF_API_KEY",
-      "access_tier": "credits",
-      "documentation_url": "https://huggingface.co/docs/inference-providers/pricing",
-      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-      "models": [
-        {
-          "id": "Qwen/Qwen3.8-27B",
-          "name": "Qwen 3.8 27B",
-          "preview": false
-        },
-        {
-          "id": "google/gemma-4-31B-it",
-          "name": "Gemma 4 31B",
-          "preview": false
-        }
-      ]
     }
   ]
 }

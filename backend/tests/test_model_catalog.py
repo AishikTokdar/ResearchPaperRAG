@@ -31,19 +31,17 @@ class CatalogTests(unittest.TestCase):
         settings = Settings(_env_file=None, default_provider="gemini", default_model="gemini-3.6-flash")
         self.assertEqual(settings.default_model, "gemini-3.8-flash")
 
-    def test_credit_providers_require_opt_in_even_with_keys(self):
-        settings = Settings(_env_file=None, allow_credit_providers=False)
+    def test_all_catalog_providers_are_free_tier(self):
+        settings = Settings(_env_file=None)
         service = LLMService()
         with patch("app.config.get_settings", return_value=settings), patch(
             "app.services.llm_service.get_all_provider_api_keys", return_value=["test-key"]
         ):
             sequence = service._llm_attempt_sequence(settings.default_model)
             self.assertEqual({p.name for p, _ in sequence}, {"gemini", "groq", "sambanova", "openrouter"})
-            with self.assertRaisesRegex(ValueError, "credits"):
-                GapAnalyzerEngine._validate_model("cerebras", "qwen-3.8-27b", None)
-        with patch("app.config.get_settings", return_value=SimpleNamespace(allow_credit_providers=True)):
-            self.assertTrue(provider_is_allowed(AI_PROVIDERS["cerebras"]))
-            self.assertTrue(provider_is_allowed(AI_PROVIDERS["huggingface"]))
+        for p in AI_PROVIDERS.values():
+            self.assertEqual(p.access_tier, "free")
+            self.assertTrue(provider_is_allowed(p))
 
     def test_latest_sdk_serializes_grounded_chat_without_real_network(self):
         captured = []

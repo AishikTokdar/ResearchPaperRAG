@@ -1,15 +1,13 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Cpu, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AI_MODELS } from "@/types";
 
 const providerEnv: Record<string, string> = {
   gemini: "GOOGLE_API_KEY (Free)",
   groq: "GROQ_API_KEY (Free)",
-  cerebras: "CEREBRAS_API_KEY (Trial credits)",
   sambanova: "SAMBANOVA_API_KEY (Free)",
-  huggingface: "HF_API_KEY (Purchased credits)",
   openrouter: "OPENROUTER_API_KEY (Free)",
 };
 
@@ -66,7 +64,7 @@ export function ModelInfoToggle({
             className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800 py-3 space-y-3"
           >
             <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-              The default fallback uses documented free tiers from Gemini, Groq, SambaNova, and OpenRouter. Quotas and eligibility apply. Cerebras trial credits and Hugging Face purchased credits require an explicit server opt-in.
+              The default fallback uses documented free tiers from Gemini, Groq, SambaNova, and OpenRouter. Quotas and eligibility apply.
             </p>
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
               {AI_MODELS.map((model) => {

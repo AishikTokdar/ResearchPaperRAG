@@ -90,6 +90,25 @@ class GroundingTests(unittest.TestCase):
         self.assertIn("[Study A - Page 3](https://example.org/paper)", answer)
         self.assertIn("[unverified source]", answer)
 
+    def test_resolve_citations_normalizes_fullwidth_and_prompt_artifacts(self):
+        doc = Document(
+            page_content="Context precision was 0.86.",
+            metadata={
+                "paper_title": "EduX-RAG Framework",
+                "paper_id": "p1",
+                "year": "2024",
+                "source": "https://doi.org/10.1234/edux",
+            },
+        )
+        _, citations = format_evidence([doc])
+        raw = "• P1 / P4 (EduX-RAG Framework) – Precision = 0.86 【E1】 ."
+        resolved = resolve_citations(raw, citations)
+        self.assertIn("**EduX-RAG Framework**", resolved)
+        self.assertNotIn("P1 / P4", resolved)
+        self.assertNotIn("【E1】", resolved)
+        self.assertIn("[EduX-RAG Framework](https://doi.org/10.1234/edux).", resolved)
+        self.assertNotIn(" .", resolved)
+
     def test_no_evidence_makes_no_api_call(self):
         service = LLMService()
         with patch.object(service, "generate_text") as generate:

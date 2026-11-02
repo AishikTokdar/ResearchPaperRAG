@@ -86,7 +86,7 @@ flowchart TD
 
 ## Curated Model Catalog
 
-ResearchPaperRAG provides a unified catalog of 17 reviewed models across 6 providers. Defaults prioritize free-tier availability:
+ResearchPaperRAG provides a unified catalog of reviewed models across 4 free-tier providers. Defaults prioritize free-tier availability:
 
 | Provider | Access Tier | Reviewed Model IDs | Notes |
 |---|---|---|---|
@@ -94,10 +94,7 @@ ResearchPaperRAG provides a unified catalog of 17 reviewed models across 6 provi
 | **Groq** | Free Tier | `openai/gpt-oss-120b`<br>`openai/gpt-oss-20b`<br>`qwen/qwen3.8-27b` | Ultra-fast LPU inference, structured outputs. |
 | **SambaNova** | Free Tier | `DeepSeek-V3.1`<br>`Meta-Llama-3.3-70B-Instruct`<br>`gpt-oss-120b`<br>`DeepSeek-V3.2` *(Preview)*<br>`gemma-4-31B-it` *(Preview)* | Generous token rate limits on hosted open models. |
 | **OpenRouter** | Free Tier | `openrouter/free`<br>`google/gemma-4-31b-it:free`<br>`google/gemma-4-26b-a4b-it:free`<br>`nvidia/nemotron-3.5-lightning:free` | Aggregated free community endpoints. |
-| **Cerebras** | Trial Credit | `qwen-3.8-27b` | Requires credit; disabled by default unless configured. |
-| **Hugging Face** | Credits | `Qwen/Qwen3.8-27B`<br>`google/gemma-4-31B-it` | Router endpoints for purchased inference credits. |
-
-> **Credit Safeguard**: `ALLOW_CREDIT_PROVIDERS=false` by default. Adding a Cerebras or Hugging Face token will not enroll paid models into failover unless `ALLOW_CREDIT_PROVIDERS=true` is explicitly enabled.
+| **Hugging Face** | Embeddings | `sentence-transformers/all-MiniLM-L6-v2` | Used for document and paper embedding retrieval. |
 
 ---
 

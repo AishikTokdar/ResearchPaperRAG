@@ -189,10 +189,11 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                 if len(_cooldowns) < 10000:
                     _cooldowns[signature] = now + (300 if auth else 60)
         logger.warning(
-            "LLM attempt failed provider=%s model=%s error_type=%s",
+            "LLM attempt failed provider=%s model=%s error_type=%s: %s",
             provider.name,
             model,
             type(error).__name__,
+            error,
         )
 
     @staticmethod

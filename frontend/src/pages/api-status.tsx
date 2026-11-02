@@ -6,8 +6,10 @@ import {
   FileJson2,
   RefreshCw,
   Server,
+  ServerOff,
   ShieldCheck,
   Cpu,
+  AlertTriangle,
 } from "lucide-react";
 import { PageWrapper, SectionWrapper } from "@/components/layout/page-wrapper";
 import { GlassCard, GlassCardContent } from "@/components/ui/glass-card";
@@ -16,9 +18,11 @@ import { Button } from "@/components/ui/button";
 import { fetchRuntimeSummary } from "@/lib/api";
 import { joinApiUrl } from "@/lib/constants";
 import { resolveApiBaseUrl } from "@/lib/env";
+import { useHealth } from "@/context/health-context";
 import type { RuntimeSummary, RuntimeProviderRow } from "@/types";
 
 export function ApiStatusPage() {
+  const { isOffline, isProlongedOffline, checkNow } = useHealth();
   const [data, setData] = React.useState<RuntimeSummary | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -123,9 +127,47 @@ export function ApiStatusPage() {
           </div>
         </div>
 
-        {err && (
-          <GlassCard role="alert" padding="default" className="mb-6 border-red-500/50 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300">
-            <p className="text-sm font-medium">Failed to connect to backend ({activeApiUrl}): {err}</p>
+        {(err || isOffline) && (
+          <GlassCard
+            role="alert"
+            padding="default"
+            className="mb-6 border-red-500/40 bg-red-50/80 dark:bg-red-950/30 text-red-700 dark:text-red-300 shadow-sm"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-red-500/20 text-red-500 shrink-0 mt-0.5">
+                  <ServerOff className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-red-800 dark:text-red-200">
+                    Backend Service Offline / Unreachable
+                  </h3>
+                  <p className="text-xs text-red-700 dark:text-red-300/90 mt-1 leading-relaxed">
+                    Could not establish a connection to <code className="font-mono bg-red-100 dark:bg-red-900/50 px-1 py-0.5 rounded text-[11px]">{activeApiUrl}</code>.
+                    {isProlongedOffline && (
+                      <span className="block mt-1 text-zinc-600 dark:text-zinc-400">
+                        • <strong>Cloud Sleep:</strong> If hosted on free tiers (like Hugging Face Spaces or Render), instances sleep after inactivity and need ~30–60 seconds to complete cold boot.
+                        <br />
+                        • <strong>Local Development:</strong> Ensure your FastAPI backend server is running (<code className="font-mono text-[11px]">python -m uvicorn api.index:app --port 7860</code>).
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void checkNow();
+                  void load(true);
+                }}
+                disabled={loading || refreshing}
+                className="shrink-0 bg-red-500/10 hover:bg-red-500/20 text-red-800 dark:text-red-200 border-red-500/30 gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                Wake / Test Connection
+              </Button>
+            </div>
           </GlassCard>
         )}
 
@@ -138,8 +180,8 @@ export function ApiStatusPage() {
                 <Server className="w-4 h-4" />
               </div>
               <div className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Badge variant={getStatusBadgeVariant(data?.status ?? "")}>
-                  {data?.status ?? (loading ? "Checking..." : "Offline")}
+                <Badge variant={data?.status ? getStatusBadgeVariant(data.status) : (isOffline || err ? "destructive" : "secondary")}>
+                  {data?.status ?? (loading ? "Checking..." : isProlongedOffline ? "Backend Offline" : "Offline")}
                 </Badge>
               </div>
             </GlassCardContent>

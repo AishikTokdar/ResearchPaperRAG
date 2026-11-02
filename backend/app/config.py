@@ -223,9 +223,6 @@ def get_all_provider_api_keys(provider_name: str, custom_key: str | None = None)
         add_key_str(settings.groq_api_key)
         add_key_str(os.getenv("GROQ_API_KEYS"))
         add_key_str(os.getenv("GROQ_API_KEY"))
-    elif pname == "cerebras":
-        add_key_str(os.getenv("CEREBRAS_API_KEYS"))
-        add_key_str(os.getenv("CEREBRAS_API_KEY"))
     elif pname == "sambanova":
         add_key_str(os.getenv("SAMBANOVA_API_KEYS"))
         add_key_str(os.getenv("SAMBANOVA_API_KEY"))

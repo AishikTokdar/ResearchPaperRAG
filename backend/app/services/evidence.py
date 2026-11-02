@@ -77,6 +77,7 @@ def format_evidence(documents: list[Document]) -> tuple[str, dict[str, str]]:
         meta = doc.metadata
         title = str(meta.get("paper_title") or meta.get("source_file") or "Document")
         title = re.sub(r"[\[\]<>\n\r]", " ", title)
+        title = re.sub(r"\s+", " ", title).strip()
         page = meta.get("page")
         label = f"{title} - Page {page + 1}" if isinstance(page, int) else title
         url = str(meta.get("source", ""))
@@ -93,21 +94,58 @@ def format_evidence(documents: list[Document]) -> tuple[str, dict[str, str]]:
         if source_key not in sources:
             sources[source_key] = f"P{len(sources) + 1}"
             blocks.append(
-                f"Source {sources[source_key]}: {title}; year={meta.get('year', 'unknown')}"
+                f"Source: {title}; year={meta.get('year', 'unknown')}"
             )
         scope = meta.get("evidence_scope", "full_text")
         location = f"; page={page + 1}" if isinstance(page, int) else ""
         blocks.append(
-            f"[{evidence_id}; paper={sources[source_key]}{location}; scope={scope}]\n{doc.page_content}"
+            f"[{evidence_id}; title={title}{location}; scope={scope}]\n{doc.page_content}"
         )
     return "\n\n".join(blocks), citations
 
 
 def resolve_citations(answer: str, citations: dict[str, str]) -> str:
+    # 1. Normalize fullwidth/Chinese brackets: 【E1】 -> [E1]
+    answer = answer.replace("【", "[").replace("】", "]")
+
+    # 2. Normalize compound and messy bracketed citation tags
+    answer = re.sub(
+        r"\[(E\d+(?:\s*,\s*E\d+)+)\]",
+        lambda match: " ".join(f"[{part.strip()}]" for part in match[1].split(",")),
+        answer,
+    )
+    answer = re.sub(r"\[(E\d+)[;:,\s][^\]]*\]", r"[\1]", answer)
+    answer = re.sub(r"\(E(\d+)\)", r"[E\1]", answer)
+
+    # 3. Clean prompt artifact prefixes like "• P1 / P4 (Title) –" -> "• **Title** –"
+    def _clean_bullet_header(m: re.Match) -> str:
+        prefix = m.group(1)
+        inner = (m.group(2) or m.group(3) or "").strip()
+        if inner.startswith("**") and inner.endswith("**"):
+            return f"{prefix}{inner}"
+        return f"{prefix}**{inner}**"
+
+    answer = re.sub(
+        r"(?m)^(\s*[-*•]\s*)(?:(?:Source\s+)?P\d+(?:\s*[/,-]\s*(?:P\d+|E\d+))*\s*[:\-–—]?\s*)(?:\(([^)\n]+)\)|([^\n–—:-]+[:\-–—]))",
+        _clean_bullet_header,
+        answer,
+    )
+    answer = re.sub(r"\bP\d+\s*[/,-]\s*(?:P\d+|E\d+)\b", "", answer)
+    answer = re.sub(r"(?m)^(\s*[-*•]\s*)(?:Source\s+)?P\d+\s*[:\-–—]\s*", r"\1", answer)
+
+    # 4. Replace evidence tags with citations
     def replace(match: re.Match) -> str:
         return citations.get(match.group(1), "[unverified source]")
 
-    return re.sub(r"\[(E\d+)\]", replace, answer)
+    resolved = re.sub(r"\[(E\d+)\]", replace, answer)
+
+    # 5. Deduplicate consecutive identical markdown links: [Title](url) [Title](url) -> [Title](url)
+    resolved = re.sub(r"(\[[^\]]+\]\([^)]+\))(?:\s+\1)+", r"\1", resolved)
+
+    # 6. Fix spaces before sentence punctuation after citation: [Title](url) . -> [Title](url).
+    resolved = re.sub(r"(\[[^\]]+\](?:\([^)]+\))?)\s+([.,;:!?])", r"\1\2", resolved)
+
+    return resolved
 
 
 def ground_answer(
@@ -118,11 +156,23 @@ def ground_answer(
     allow_background: bool = False,
 ) -> str:
     """Fail closed on invalid citation IDs; this checks provenance, not entailment."""
+    answer = answer.replace("【", "[").replace("】", "]")
     answer = re.sub(
         r"\[(E\d+(?:\s*,\s*E\d+)+)\]",
         lambda match: " ".join(f"[{part.strip()}]" for part in match[1].split(",")),
         answer,
     )
+    answer = re.sub(r"\[(E\d+)[;:,\s][^\]]*\]", r"[\1]", answer)
+    answer = re.sub(r"\(E(\d+)\)", r"[E\1]", answer)
+
+    def _map_paper_to_evidence(m):
+        num = m.group(1)
+        eid = f"E{num}"
+        return f"[{eid}]" if eid in citations else m.group(0)
+
+    answer = re.sub(r"\[(?:Paper|P)\s*(\d+)\]", _map_paper_to_evidence, answer, flags=re.I)
+    answer = re.sub(r"\bP\d+\s*[/,-]\s*(?:P\d+|E\d+)\b", "", answer)
+
     ids = set(re.findall(r"\[(E\d+)\]", answer))
     if ids - citations.keys():
         return "I cannot verify this response because it cited evidence that was not supplied."
@@ -131,6 +181,8 @@ def ground_answer(
         answer,
         re.I,
     ):
+        if allow_background and len(answer.split()) > 30:
+            return resolve_citations(answer, citations)
         return "I cannot provide a grounded answer: the generated response did not cite the supplied evidence."
     # The model must not invent source links; URLs come exclusively from the citation map.
     answer = re.sub(
@@ -157,7 +209,18 @@ def ground_answer(
         for block in blocks:
             headings = re.findall(r"(?m)^#{1,6}\s+([^\n]+)", block)
             if headings:
-                background = headings[-1].strip().casefold() == "background knowledge"
+                last_h = headings[-1].strip().casefold()
+                background = last_h == "background knowledge" or any(
+                    s in last_h
+                    for s in [
+                        "future direction",
+                        "novel paper",
+                        "research gap",
+                        "proposed",
+                        "hypothesis",
+                        "background",
+                    ]
+                )
             prose = "\n".join(
                 line
                 for line in block.splitlines()

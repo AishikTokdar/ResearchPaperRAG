@@ -14,8 +14,8 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           <div className="md:col-span-2 space-y-4">
             <Link to="/" className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl brand-mark flex items-center justify-center">
-                <BookOpen className="h-4 w-4" aria-hidden="true" />
+              <div className="h-9 w-9 rounded-xl overflow-hidden flex items-center justify-center p-0.5 border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-950 shadow-xs">
+                <img src="/logo.svg" alt="ResearchPaperRAG logo" className="h-full w-full object-contain" />
               </div>
               <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 {APP_CONFIG.name}

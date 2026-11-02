@@ -96,7 +96,7 @@ export const FEATURES = [
   {
     title: "4 Free-Tier AI Providers",
     description:
-      "Free-tier inference through Gemini, Groq, SambaNova, and OpenRouter; optional credit-based Cerebras and Hugging Face integrations.",
+      "Free-tier inference through Gemini, Groq, SambaNova, and OpenRouter.",
   },
   {
     title: "FAISS Vector Indexing",

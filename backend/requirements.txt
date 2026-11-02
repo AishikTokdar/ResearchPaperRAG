@@ -2,8 +2,8 @@
 # Direct runtime dependencies, verified 2026-11-02.
 fastapi>=0.162.0,<0.163.0
 uvicorn[standard]>=0.54.0,<0.55.0
-pydantic>=2.14.2,<3.0.0
-pydantic-settings>=2.16.2,<3.0.0
+pydantic>=2.11.10,<=2.12.5
+pydantic-settings>=2.6.0,<3.0.0
 python-multipart>=0.0.33,<0.1.0
 sse-starlette>=3.6.0,<4.0.0
 langchain-community>=0.4.2,<0.5.0

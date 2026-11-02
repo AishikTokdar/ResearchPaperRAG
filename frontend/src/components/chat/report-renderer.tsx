@@ -198,25 +198,48 @@ export function sanitizeReportMarkdown(raw: string): string {
 
   let cleaned = stripProcessingNotices(raw);
 
-  // 1. Separate subheaders directly attached to code fences like ``` ### Header
+  // 1. Normalize fullwidth/Chinese brackets 【E1】 -> [E1]
+  cleaned = cleaned.replace(/【/g, "[").replace(/】/g, "]");
+
+  // 2. Clean prompt artifact shorthand from bullet headers, e.g. "• P1 / P4 (Title) –" -> "• **Title** –"
+  cleaned = cleaned.replace(
+    /(^|\n)(\s*[-*•]\s*)(?:(?:Source\s+)?P\d+(?:\s*[/,-]\s*(?:P\d+|E\d+))*\s*[:\-–—]?\s*)(?:\(([^)\n]+)\)|([^\n–—:-]+[:\-–—]))/gi,
+    (m, p1, p2, p3, p4) => {
+      const title = (p3 || p4 || "").trim();
+      if (!title) return `${p1}${p2}`;
+      if (title.startsWith("**") && title.endsWith("**")) return `${p1}${p2}${title}`;
+      return `${p1}${p2}**${title}**`;
+    }
+  );
+  cleaned = cleaned.replace(/\b(?:Source\s+)?P\d+\s*(?:[/,-]\s*(?:P\d+|E\d+))*\s*[:\-–—]?\s*(?=\()/gi, "");
+  cleaned = cleaned.replace(/\bP\d+\s*[/,-]\s*(?:P\d+|E\d+)\b/gi, "");
+  cleaned = cleaned.replace(/(^|\n)(\s*[-*•]\s*)(?:Source\s+)?P\d+\s*[:\-–—]\s*/gi, "$1$2");
+
+  // 3. Fix spaces before sentence punctuation after citation: [Citation](url) . -> [Citation](url).
+  cleaned = cleaned.replace(/(\[[^\]]+\](?:\([^)]+\))?)\s+([.,;:!?])/g, "$1$2");
+
+  // 4. Deduplicate consecutive identical links
+  cleaned = cleaned.replace(/(\[[^\]]+\]\([^)]+\))(?:\s+\1)+/g, "$1");
+
+  // 5. Separate subheaders directly attached to code fences like ``` ### Header
   cleaned = cleaned.replace(/```+\s*(###?\s+[^\n]+)/g, "\n\n$1");
 
-  // 2. Strip ASCII box drawing borders like +-----------------+-----------------+ or • +-------+
+  // 6. Strip ASCII box drawing borders like +-----------------+-----------------+ or • +-------+
   cleaned = cleaned.replace(/^\s*(?:```\s*)?[+•|]?\s*[-+=]{3,}.*$/gm, "");
   cleaned = cleaned.replace(/^\s*[+•|]\s*[-+=]{3,}.*$/gm, "");
 
-  // 3. Remove orphaned backtick lines
+  // 7. Remove orphaned backtick lines
   cleaned = cleaned.replace(/^\s*```[a-zA-Z]*\s*$/gm, "");
 
-  // 4. Normalize section headers to standard "## N. Section Title"
+  // 8. Normalize section headers to standard "## N. Section Title"
   cleaned = cleaned.replace(/^###?\s*(\d+\.\s+[^\n]+?):?\s*$/gm, "## $1");
   cleaned = cleaned.replace(/^\*\*\s*(\d+\.\s+[^*]+)\s*\*\*:?\s*$/gm, "## $1");
 
-  // 5. Ensure headers (## and ###) have clean newlines around them
+  // 9. Ensure headers (## and ###) have clean newlines around them
   cleaned = cleaned.replace(/([^\n])\n(###?\s+)/g, "$1\n\n$2");
   cleaned = cleaned.replace(/(###?\s+[^\n]+)\n([^\n#])/g, "$1\n\n$2");
 
-  // 6. Clean up multiple empty lines
+  // 10. Clean up multiple empty lines
   cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
 
   return cleaned.trim();
@@ -268,7 +291,7 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
 
 
     if (cleanContent.startsWith("Error generating research gap report:")) {
-      alertMessage = "All AI model providers (Groq, OpenRouter, Cerebras, SambaNova, Gemini) were temporarily unable to process the request due to API rate limits or token quota constraints.\n\n**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again.";
+      alertMessage = "All AI model providers (Groq, OpenRouter, SambaNova, Gemini) were temporarily unable to process the request due to API rate limits or token quota constraints.\n\n**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `SAMBANOVA_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again.";
     }
 
     return (
@@ -575,6 +598,16 @@ function RichInlineText({ text }: { text: string }) {
   if (!text) return null;
 
   let cleaned = text.replace(/^#+\s*/, "");
+  // Normalize fullwidth/Chinese brackets 【E1】 -> [E1]
+  cleaned = cleaned.replace(/【/g, "[").replace(/】/g, "]");
+
+  // Clean prompt artifact shorthand like P1 / P4, P3 / P6-E7, etc.
+  cleaned = cleaned.replace(/\b(?:Source\s+)?P\d+\s*(?:[/,-]\s*(?:P\d+|E\d+))*\s*[:\-–—]?\s*(?=\()/gi, "");
+  cleaned = cleaned.replace(/\bP\d+\s*[/,-]\s*(?:P\d+|E\d+)\b/gi, "");
+  cleaned = cleaned.replace(/\b(?:Source\s+)?P\d+\s*[:\-–—]\s*/gi, "");
+  cleaned = cleaned.replace(/(\[[^\]]+\](?:\([^)]+\))?)\s+([.,;:!?])/g, "$1$2");
+  cleaned = cleaned.replace(/(\[[^\]]+\]\([^)]+\))(?:\s+\1)+/g, "$1");
+
   // Sanitize nested bracket links and strip internal chunk numbers (e.g. Chunk 19)
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]/gi, "[$1]($2)");
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]/g, "[$1]($2)");
@@ -611,20 +644,19 @@ function RichInlineText({ text }: { text: string }) {
             href={finalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline inline gap-1 text-sm underline decoration-indigo-300 dark:decoration-indigo-700 underline-offset-2 transition-colors mx-0.5"
-            title="Open research paper in a new tab"
+            className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline text-xs sm:text-sm underline decoration-indigo-300 dark:decoration-indigo-700 underline-offset-2 transition-colors mx-0.5 align-baseline"
+            title={`Open paper: ${rawText}`}
           >
-            {rawText} <ExternalLink className="w-3 h-3 inline align-baseline ml-0.5 text-indigo-500" />
+            {rawText} <ExternalLink className="w-3 h-3 inline shrink-0 text-indigo-500" />
           </a>
         );
-      }
-      else {
+      } else {
         parts.push(
           <span
             key={key}
-            className="inline border border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium leading-normal mx-0.5 break-words"
+            className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-sans text-xs font-medium mx-0.5 break-words align-baseline"
           >
-            [{rawText}]
+            {rawText}
           </span>
         );
       }
@@ -648,12 +680,18 @@ function RichInlineText({ text }: { text: string }) {
       );
     } else if (m[7] !== undefined && m[7].length > 1) {
       const cleanCitationText = m[7].replace(/[*_]/g, "").trim();
+      const isEvidenceId = /^E\d+$/i.test(cleanCitationText);
       parts.push(
         <span
           key={key}
-          className="inline border border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium leading-normal mx-0.5 break-words"
+          className={
+            isEvidenceId
+              ? "inline-flex items-center px-1.5 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 font-mono text-[10px] font-semibold tracking-tight mx-0.5 align-baseline"
+              : "inline-flex items-center px-1.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-sans text-xs font-medium mx-0.5 break-words align-baseline"
+          }
+          title={isEvidenceId ? `Evidence Reference ${cleanCitationText}` : cleanCitationText}
         >
-          [{cleanCitationText}]
+          {isEvidenceId ? `[Ref ${cleanCitationText}]` : cleanCitationText}
         </span>
       );
     } else {

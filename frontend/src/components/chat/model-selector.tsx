@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Cpu, Check, AlertCircle, CheckCircle2, Sparkles, Zap, Layers, Library, Globe, Filter } from "lucide-react";
+import { ChevronDown, Check, AlertCircle, CheckCircle2, Sparkles, Zap, Layers, Globe, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AI_MODELS, type AIModel, type AIProvider } from "@/types";
 import { API_ENDPOINTS, joinApiUrl } from "@/lib/constants";
@@ -14,9 +14,7 @@ export interface ModelSelectorProps {
 const providerLabels: Record<AIProvider, { label: string; icon: React.ElementType }> = {
   gemini: { label: "Google Gemini", icon: Sparkles },
   groq: { label: "Groq LPU", icon: Zap },
-  cerebras: { label: "Cerebras Engine", icon: Cpu },
   sambanova: { label: "SambaNova", icon: Layers },
-  huggingface: { label: "Hugging Face", icon: Library },
   openrouter: { label: "OpenRouter Free", icon: Globe },
 };
 

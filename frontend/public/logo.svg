@@ -1,7 +1,120 @@
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Uploaded to: SVG Repo, www.svgrepo.com, Transformed by: SVG Repo Mixer Tools -->
-<svg width="256px" height="256px" viewBox="0 0 48.00 48.00" id="b" xmlns="http://www.w3.org/2000/svg" fill="#ffffff" stroke="#ffffff">
-<g id="SVGRepo_bgCarrier" stroke-width="0"/>
-<g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round" stroke="#fcfcfc" stroke-width="1.7280000000000002"> <defs> <style>.l,.m,.n{fill:none;stroke:#46bfdd;stroke-linecap:round;stroke-linejoin:round;}.m{stroke-width:1.7759999999999998;}.n{stroke-width:1.7759999999999998;}</style> </defs> <g id="c"> <path id="d" class="l" d="m42.5,11.6719v-4.1719c0-1.1046-.8954-2-2-2h-8.5"/> <path id="e" class="l" d="m33,42.5h7.5c1.1046,0,2-.8954,2-2v-6.084"/> <path id="f" class="l" d="m5.5,36.416v4.084c0,1.1046.8954,2,2,2h9.6875"/> <path id="g" class="l" d="m17.1875,5.5H7.5c-1.1046,0-2,.8954-2,2v5.1719"/> <path id="h" class="m" d="m43.2779,15.3472L22.8324,3.5407c-.8364-.483-1.906-.1964-2.3889.6402L5.1418,30.6894c-.4829.8366-.1963,1.9063.6401,2.3893h0l20.4455,11.8065c.8364.483,1.906.1964,2.3889-.6402l15.3018-26.5085c.4829-.8366.1963-1.9063-.6401-2.3893Z"/> <path id="i" class="n" d="m34.2511,19.1776l-13.5202-7.9182"/> <path id="j" class="m" d="m36.0056,24.5922l-17.2326-9.9511"/> <path id="k" class="m" d="m34.0224,28.0449l-17.2326-9.9511"/> </g> </g>
-<g id="SVGRepo_iconCarrier"> <defs> <style>.l,.m,.n{fill:none;stroke:#46bfdd;stroke-linecap:round;stroke-linejoin:round;}.m{stroke-width:1.7759999999999998;}.n{stroke-width:1.7759999999999998;}</style> </defs> <g id="c"> <path id="d" class="l" d="m42.5,11.6719v-4.1719c0-1.1046-.8954-2-2-2h-8.5"/> <path id="e" class="l" d="m33,42.5h7.5c1.1046,0,2-.8954,2-2v-6.084"/> <path id="f" class="l" d="m5.5,36.416v4.084c0,1.1046.8954,2,2,2h9.6875"/> <path id="g" class="l" d="m17.1875,5.5H7.5c-1.1046,0-2,.8954-2,2v5.1719"/> <path id="h" class="m" d="m43.2779,15.3472L22.8324,3.5407c-.8364-.483-1.906-.1964-2.3889.6402L5.1418,30.6894c-.4829.8366-.1963,1.9063.6401,2.3893h0l20.4455,11.8065c.8364.483,1.906.1964,2.3889-.6402l15.3018-26.5085c.4829-.8366.1963-1.9063-.6401-2.3893Z"/> <path id="i" class="n" d="m34.2511,19.1776l-13.5202-7.9182"/> <path id="j" class="m" d="m36.0056,24.5922l-17.2326-9.9511"/> <path id="k" class="m" d="m34.0224,28.0449l-17.2326-9.9511"/> </g> </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Definitions -->
+  <defs>
+    <!-- Background container gradient: deep scholarly ink/forest -->
+    <linearGradient id="containerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#18201b" />
+      <stop offset="100%" stop-color="#0f1411" />
+    </linearGradient>
+
+    <!-- Front document sheet gradient: warm academic ivory/cream -->
+    <linearGradient id="pageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f4f4ee" />
+    </linearGradient>
+
+    <!-- Back document sheet: secondary research paper -->
+    <linearGradient id="backPageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d8dbd2" />
+      <stop offset="100%" stop-color="#c4c8bd" />
+    </linearGradient>
+
+    <!-- Corner fold flap gradient -->
+    <linearGradient id="foldFlapGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8ebe1" />
+      <stop offset="100%" stop-color="#d1d6c8" />
+    </linearGradient>
+
+    <!-- Subtle drop shadows -->
+    <filter id="pageShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#050806" flood-opacity="0.45" />
+    </filter>
+    <filter id="flapShadow" x="-20%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="-3" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- App Icon Squircle Container -->
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#containerGrad)" stroke="#2b3830" stroke-width="3" />
+
+  <!-- Secondary Back Research Paper (Stacked / Retrieved Corpus) -->
+  <g transform="translate(18, -14) rotate(4 256 256)">
+    <rect
+      x="136"
+      y="94"
+      width="240"
+      height="324"
+      rx="16"
+      fill="url(#backPageGrad)"
+      opacity="0.55"
+    />
+  </g>
+
+  <!-- Primary Front Research Paper -->
+  <g filter="url(#pageShadow)">
+    <!-- Main page body with folded top-right corner -->
+    <!-- Left: 126, Right: 386, Width: 260. Top: 94, Bottom: 422, Height: 328 -->
+    <!-- Fold starts at X=318 on top edge, down to Y=162 on right edge -->
+    <path
+      d="M 144 94
+         L 318 94
+         L 386 162
+         L 386 406
+         A 16 16 0 0 1 370 422
+         L 142 422
+         A 16 16 0 0 1 126 406
+         L 126 112
+         A 18 18 0 0 1 144 94 Z"
+      fill="url(#pageGrad)"
+    />
+
+    <!-- Folded Corner Flap -->
+    <path
+      d="M 318 94
+         L 318 146
+         A 16 16 0 0 0 334 162
+         L 386 162 Z"
+      fill="url(#foldFlapGrad)"
+      filter="url(#flapShadow)"
+    />
+
+    <!-- Academic Research Bookmark Ribbon (Sage Green - Project Accent) -->
+    <path
+      d="M 166 94
+         L 166 216
+         L 186 198
+         L 206 216
+         L 206 94 Z"
+      fill="#305d4d"
+    />
+
+    <!-- Scholarly Document Content - Two-Column Academic Paper Format -->
+    <g stroke-linecap="round">
+      <!-- Title Bar (Header) -->
+      <rect x="222" y="124" width="84" height="10" rx="5" fill="#244a3c" />
+      <rect x="222" y="142" width="58" height="7" rx="3.5" fill="#8f998d" />
+
+      <!-- Section Divider Hairline -->
+      <line x1="152" y1="234" x2="360" y2="234" stroke="#d5d9ce" stroke-width="2.5" />
+
+      <!-- Left Column Text Blocks -->
+      <rect x="152" y="254" width="92" height="7.5" rx="3.75" fill="#525c54" />
+      <rect x="152" y="272" width="84" height="6.5" rx="3.25" fill="#8f998d" />
+      <rect x="152" y="288" width="90" height="6.5" rx="3.25" fill="#8f998d" />
+      <rect x="152" y="304" width="70" height="6.5" rx="3.25" fill="#8f998d" />
+
+      <!-- Right Column Text Blocks -->
+      <rect x="268" y="254" width="92" height="7.5" rx="3.75" fill="#525c54" />
+      <rect x="268" y="272" width="88" height="6.5" rx="3.25" fill="#8f998d" />
+      <rect x="268" y="288" width="78" height="6.5" rx="3.25" fill="#8f998d" />
+      <rect x="268" y="304" width="84" height="6.5" rx="3.25" fill="#8f998d" />
+
+      <!-- Citation / Footnote Reference Bar (Academic RAG Grounding) -->
+      <rect x="152" y="338" width="208" height="42" rx="8" fill="#eef1e8" stroke="#d6dcce" stroke-width="1.5" />
+      <!-- Citation Marker Dot & Index Line -->
+      <circle cx="172" cy="359" r="6" fill="#305d4d" />
+      <rect x="188" y="354" width="102" height="6" rx="3" fill="#305d4d" />
+      <rect x="188" y="365" width="64" height="5" rx="2.5" fill="#7d887a" />
+    </g>
+  </g>
+</svg>

@@ -125,7 +125,11 @@ export function ChatPage() {
       });
 
       const unavailable = res.source_status?.filter((source) => source.status !== "ok").map((source) => source.source) ?? [];
-      setSearchNotice(unavailable.length ? `Some sources could not be reached: ${unavailable.join(", ")}. You can use these results or try searching again.` : null);
+      setSearchNotice(
+        recentPapers.length < 3 && unavailable.length > 0
+          ? `Some sources could not be reached: ${unavailable.join(", ")}. You can use these results or try searching again.`
+          : null
+      );
       setHasSearched(true);
       setFetchedPapers(recentPapers);
       const initialSelected = new Set(recentPapers.slice(0, Math.max(0, MAX_SELECTED_PAPERS - uploadedFiles.length)).map((p) => p.id));

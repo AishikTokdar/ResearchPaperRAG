@@ -13,6 +13,7 @@ import {
   BookOpen,
   LineChart,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import { joinApiUrl } from "@/lib/constants";
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const location = useLocation();
-  const { status } = useHealth();
+  const { status, isOffline, isProlongedOffline, isChecking, checkNow } = useHealth();
   const { isDark, toggleTheme } = useTheme();
 
   React.useEffect(() => {
@@ -49,8 +50,8 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <nav className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="h-9 w-9 rounded-xl brand-mark flex items-center justify-center">
-              <BookOpen className="h-4 w-4" aria-hidden="true" />
+            <div className="h-9 w-9 rounded-xl overflow-hidden flex items-center justify-center p-0.5 border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-950 shadow-xs group-hover:border-[var(--accent)] transition-colors">
+              <img src="/logo.svg" alt="ResearchPaperRAG logo" className="h-full w-full object-contain" />
             </div>
             <span className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
               {APP_CONFIG.name}
@@ -87,13 +88,44 @@ export function Header() {
 
             <ApiNavDropdown />
 
-            <div
-              className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400"
-              title={`Backend Status: ${status}`}
-            >
-              <span className={cn("w-2 h-2 rounded-full", healthColor)} />
-              <span>{status === "connected" ? "Online" : status === "disconnected" ? "Offline" : "Checking..."}</span>
-            </div>
+            {status === "connected" ? (
+              <div
+                className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-emerald-500/20 bg-emerald-500/5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                title="Backend API: Connected & Ready"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>Online</span>
+              </div>
+            ) : status === "disconnected" ? (
+              <button
+                type="button"
+                onClick={() => void checkNow()}
+                disabled={isChecking}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors cursor-pointer",
+                  isProlongedOffline
+                    ? "border-red-500/40 bg-red-500/15 text-red-600 dark:text-red-400 hover:bg-red-500/25"
+                    : "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20"
+                )}
+                title={
+                  isProlongedOffline
+                    ? "Backend has been offline for a while. Click to test / wake up connection."
+                    : "Backend offline. Click to test connection."
+                }
+              >
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span>{isProlongedOffline ? "Backend Offline" : "Offline"}</span>
+                <RefreshCw className={cn("w-3 h-3 ml-0.5", isChecking && "animate-spin")} />
+              </button>
+            ) : (
+              <div
+                className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                title="Checking Backend Health..."
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>Checking...</span>
+              </div>
+            )}
 
             <button
               type="button"
@@ -187,6 +219,31 @@ export function Header() {
               <LineChart className="w-4 h-4" />
               API Status
             </Link>
+            <div className="px-3 py-2 flex items-center justify-between text-xs border-t border-zinc-200 dark:border-zinc-800">
+              <span className="text-zinc-500">Backend Status</span>
+              {status === "connected" ? (
+                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Online
+                </span>
+              ) : status === "disconnected" ? (
+                <button
+                  type="button"
+                  onClick={() => void checkNow()}
+                  disabled={isChecking}
+                  className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-medium"
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  {isProlongedOffline ? "Backend Offline (Retry)" : "Offline"}
+                  <RefreshCw className={cn("w-3 h-3 ml-0.5", isChecking && "animate-spin")} />
+                </button>
+              ) : (
+                <span className="flex items-center gap-1.5 text-amber-500 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  Checking...
+                </span>
+              )}
+            </div>
             <div className="pt-2">
               <Button variant="default" className="w-full" asChild>
                 <Link to="/chat">Open workspace</Link>

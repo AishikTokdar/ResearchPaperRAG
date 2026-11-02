@@ -539,7 +539,7 @@ def create_gradio_app() -> gr.Blocks:
                             value=settings.default_model,
                             allow_custom_value=True,
                             label="Select AI Model",
-                            info="Supports OpenRouter, Gemini, Groq, Cerebras, SambaNova & HuggingFace models.",
+                            info="Supports OpenRouter, Gemini, Groq & SambaNova free-tier models.",
                         )
                         knowledge_mode_radio = gr.Radio(
                             choices=[
