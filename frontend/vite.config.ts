@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     resolve: {
+      dedupe: ["react", "react-dom"],
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
         "@/components": fileURLToPath(new URL("./src/components", import.meta.url)),
@@ -40,6 +41,7 @@ export default defineConfig(({ mode }) => {
     preview: { proxy: apiProxy },
     build: {
       outDir: "dist",
+      emptyOutDir: false,
       sourcemap: false,
       target: "es2020",
       minify: "esbuild",
