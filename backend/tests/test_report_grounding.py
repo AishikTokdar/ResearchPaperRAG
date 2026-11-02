@@ -121,7 +121,7 @@ class ReportIntegrationTests(unittest.TestCase):
         self.assertTrue(first["limited"])
         self.assertNotIn(2, first["sections_completed"])
         self.assertIn(8, first["sections_completed"])
-        self.assertIn(OMITTED_PASSAGE, first["report"])
+        self.assertIn("General guidance (not findings", first["report"])
         self.assertEqual(len(calls), 2)
         self.assertEqual(len(engine._cache), 0)
 

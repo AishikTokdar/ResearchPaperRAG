@@ -159,6 +159,7 @@ def ground_answer(
     allow_background: bool = False,
     preserve_valid_blocks: bool = False,
     allow_proposals: bool = False,
+    allow_general_guidance: bool = False,
 ) -> str:
     """Check provenance, not entailment. Reports can retain independently valid blocks."""
     answer = _normalize_citations(answer)
@@ -211,7 +212,12 @@ def ground_answer(
                 allow_proposals and proposal_section and prose.startswith("|")
                 and any("hypothesis" in h.casefold() and "proposed" in h.casefold() for h in table_headers)
             )
-            if not (abstention or proposal or hypothesis_row or (allow_background and background)):
+            general_guidance = (
+                allow_general_guidance
+                and re.match(r"^(?:\*\*)?General guidance(?:\*\*)?\s*:", prose, re.I)
+                and not _numbers(prose)
+            )
+            if not (abstention or proposal or hypothesis_row or general_guidance or (allow_background and background)):
                 reason = "a factual passage did not cite the supplied evidence"
         elif documents is not None:
             claim = re.sub(r"\[E\d+\]", "", prose)

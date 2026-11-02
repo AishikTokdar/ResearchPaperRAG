@@ -23,7 +23,7 @@ function getReportFilename(topic: string, ext: string): string {
 }
 
 export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps) {
-  const report = stripProcessingNotices(rawReport);
+  const report = sanitizeReportMarkdown(rawReport);
   const [copiedFull, setCopiedFull] = React.useState(false);
 
   const handleCopyFullReport = async () => {
@@ -219,14 +219,16 @@ export function sanitizeReportMarkdown(raw: string): string {
   cleaned = cleaned.replace(/(\[[^\]]+\](?:\([^)]+\))?)\s+([.,;:!?])/g, "$1$2");
 
   // 4. Deduplicate consecutive identical links
-  cleaned = cleaned.replace(/(\[[^\]]+\]\([^)]+\))(?:\s+\1)+/g, "$1");
+  cleaned = cleaned.replace(/(\[[^\]]+\]\([^)]+\))(?:\s*\1)+/g, "$1");
+  cleaned = cleaned.replace(/(\]\([^)]+\))(?=\[)/g, "$1 ");
 
   // 5. Separate subheaders directly attached to code fences like ``` ### Header
   cleaned = cleaned.replace(/```+\s*(###?\s+[^\n]+)/g, "\n\n$1");
 
   // 6. Strip ASCII box drawing borders like +-----------------+-----------------+ or • +-------+
-  cleaned = cleaned.replace(/^\s*(?:```\s*)?[+•|]?\s*[-+=]{3,}.*$/gm, "");
-  cleaned = cleaned.replace(/^\s*[+•|]\s*[-+=]{3,}.*$/gm, "");
+  const preserveTableSeparator = (line: string) => /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/.test(line) ? line : "";
+  cleaned = cleaned.replace(/^\s*(?:```\s*)?[+•|]?\s*[-+=]{3,}.*$/gm, preserveTableSeparator);
+  cleaned = cleaned.replace(/^\s*[+•|]\s*[-+=]{3,}.*$/gm, preserveTableSeparator);
 
   // 7. Remove orphaned backtick lines
   cleaned = cleaned.replace(/^\s*```[a-zA-Z]*\s*$/gm, "");
@@ -386,7 +388,7 @@ export function FormattedBlock({ text }: { text: string }) {
   let inTable = false;
   let currentTextBuffer: string[] = [];
 
-  for (const line of lines) {
+  for (const [lineIndex, line] of lines.entries()) {
     const trimmedLine = line.trim();
     if (trimmedLine.match(/^(---|---|\|--+|\*\*\*)$/)) {
       continue;
@@ -409,7 +411,17 @@ export function FormattedBlock({ text }: { text: string }) {
           tableLines.length = 0;
         }
       }
-      currentTextBuffer.push(line);
+      const startsList = (value: string) => /^(?:[-*•]\s|\d+\.\s)/.test(value.trimStart());
+      const flushText = () => {
+        if (currentTextBuffer.length) contentBlocks.push({ type: "text", content: currentTextBuffer.join("\n") });
+        currentTextBuffer = [];
+      };
+      if (!trimmedLine) {
+        if (!(startsList(currentTextBuffer[0] || "") && startsList(lines[lineIndex + 1] || ""))) flushText();
+      } else {
+        if (startsList(line) && currentTextBuffer.length && !startsList(currentTextBuffer[0])) flushText();
+        currentTextBuffer.push(line);
+      }
     }
   }
 
@@ -429,7 +441,7 @@ export function FormattedBlock({ text }: { text: string }) {
         const blockText = block.content;
 
         const hasNumberedList = /^\d+\.\s/m.test(blockText);
-        const hasBulletList = /^[*-]\s/m.test(blockText);
+        const hasBulletList = /^[-*•]\s/m.test(blockText);
 
         if (hasNumberedList) {
           const rawItems = blockText
@@ -452,13 +464,13 @@ export function FormattedBlock({ text }: { text: string }) {
 
         if (hasBulletList) {
           const rawItems = blockText
-            .split(/\n(?=[*-]\s)/)
+            .split(/\n(?=[-*•]\s)/)
             .map((s) => s.trim())
             .filter(Boolean);
           return (
             <ul key={i} className="space-y-1.5 pl-4 list-disc marker:text-zinc-400">
               {rawItems.map((rawItem, itemIdx) => {
-                const cleaned = rawItem.replace(/^[*-]\s+/, "").trim();
+                const cleaned = rawItem.replace(/^[-*•]\s+/, "").trim();
                 return (
                   <li key={itemIdx} className="leading-relaxed">
                     <RichInlineText text={cleaned} />
@@ -503,12 +515,13 @@ export function FormattedBlock({ text }: { text: string }) {
                 );
               }
 
-              if (cleanP.startsWith("### ")) {
+              if (/^#{1,3}\s/.test(cleanP)) {
+                const Heading = cleanP.startsWith("### ") ? "h3" : "h2";
                 return (
-                  <h4 key={pIdx} className="text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-4 mb-1.5 tracking-tight flex items-center gap-1.5">
+                  <Heading key={pIdx} className="text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-4 mb-1.5 tracking-tight flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block"></span>
-                    <RichInlineText text={cleanP.replace(/^###\s+/, "")} />
-                  </h4>
+                    <RichInlineText text={cleanP.replace(/^#{1,3}\s+/, "")} />
+                  </Heading>
                 );
               }
 

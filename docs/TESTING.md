@@ -18,6 +18,8 @@ Tests cover session isolation/eviction, safe downloads, body/resource limits, CO
 
 `tests/test_report_resilience.py` checks compound citations, equivalent numeric formats, unsupported/uncited passages, retained report sections, valid Markdown tables, hostile exponents, empty section headings, cache eligibility, abstract coverage, provider interruption and preservation of short PDF results. These are deterministic regressions, not a live-provider quality benchmark.
 
+`tests/test_report_presentation.py` checks labeled general guidance for missing/rejected sections, strict-mode isolation, retained valid passages, compact page citations and source lists. Frontend regressions cover proposal-table separators/first rows, export headings, duplicate citations, and guidance paragraphs after lists. No additional generation call is used for report presentation or fallback advice.
+
 `backend/tests/integration_server.py` is a loopback-only fixture. Never deploy it: it substitutes external generation/download/embedding boundaries and exposes a test PDF route. Other app/parser/FAISS/session/SSE behavior is real.
 
 ## Frontend

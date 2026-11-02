@@ -102,7 +102,7 @@ class ReportTests(unittest.TestCase):
         self.mock_stream(engine, self.report(2))
         first, second = self.collect(engine), self.collect(engine)
         self.assertEqual(first["report"], second["report"])
-        self.assertIn(OMITTED_PASSAGE, first["report"])
+        self.assertIn("General guidance (not findings", first["report"])
         self.assertTrue(first["limited"])
         self.assertNotIn(2, first["sections_completed"])
         self.assertIn(8, first["sections_completed"])
@@ -138,7 +138,7 @@ class ReportTests(unittest.TestCase):
         engine.llm.generate_text = MagicMock(return_value=(self.report(2), "fixture", []))
         report = engine.generate_gap_report("EEG", "gemini", DEFAULT_MODEL)
         self.assertIn("91%", report)
-        self.assertIn(OMITTED_PASSAGE, report)
+        self.assertIn("General guidance (not findings", report)
         self.assertFalse(engine._cache)
 
     def test_interrupted_provider_retains_report_without_calling_fallback(self):

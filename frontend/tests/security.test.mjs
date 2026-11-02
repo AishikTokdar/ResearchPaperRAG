@@ -130,6 +130,25 @@ test("PDF export escapes raw HTML and event-handler injection", async () => {
   assert.ok(html.includes("&lt;img"));
 });
 
+test("report tables retain their separator and first proposed project", async () => {
+  const markdown = "## 8. Novel Paper Suggestions\n\n| Proposed Title | Core Idea | Expected Outcome (hypothesis) |\n|---|---|---|\n| First project | Compare methods | May improve robustness |\n| Second project | Validate externally | Test generalization |";
+  const sanitized = renderer.sanitizeReportMarkdown(markdown);
+  assert.ok(sanitized.includes("|---|---|---|"));
+  const html = await renderer.renderMarkdownToHtmlString(markdown);
+  assert.equal((html.match(/<table/g) || []).length, 1);
+  assert.ok(html.includes("<h2") && !html.includes("## 8."));
+  assert.ok(html.includes("<td") && html.includes("First project") && html.includes("Second project"));
+});
+
+test("citation clusters are deduplicated and guidance stays outside bullet lists", async () => {
+  const text = "- Supported finding [Study](https://example.org/p)[Study](https://example.org/p)[Another](https://example.org/q).\n\n**General guidance**\n\nCompare study populations before drawing conclusions.";
+  const sanitized = renderer.sanitizeReportMarkdown(text);
+  assert.equal((sanitized.match(/\[Study\]/g) || []).length, 1);
+  assert.ok(sanitized.includes(") [Another]"));
+  const html = await renderer.renderMarkdownToHtmlString(text);
+  assert.ok(html.indexOf("</ul>") < html.indexOf("General guidance"));
+});
+
 test("schema validation errors show useful text instead of object placeholders", async () => {
   const previous = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ detail: [{ msg: "Question is too long" }] }), {
