@@ -45,13 +45,22 @@ export function useChat(): UseChatReturn {
   const [state, setState] = React.useState<ChatState>(initialState);
   const abortRef = React.useRef<AbortController | null>(null);
   const streamGenerationRef = React.useRef(0);
+  React.useEffect(() => () => {
+    abortRef.current?.abort();
+    streamGenerationRef.current += 1;
+  }, []);
 
   const sendMessage = React.useCallback(
     async (message: string, model?: string, includeSources?: boolean, hybridMode: boolean = false) => {
+      abortRef.current?.abort();
+      const generation = ++streamGenerationRef.current;
+      const controller = new AbortController();
+      abortRef.current = controller;
       setState((prev) => ({ ...prev, isLoading: true, error: null, statusMessage: null }));
 
       try {
-        const response = await api.askQuestion(message, model, includeSources ?? true, hybridMode);
+        const response = await api.askQuestion(message, model, includeSources ?? true, hybridMode, controller.signal);
+        if (controller.signal.aborted || generation !== streamGenerationRef.current) return;
 
         const newEntry = createChatEntry({
           question: message,
@@ -68,6 +77,7 @@ export function useChat(): UseChatReturn {
           statusMessage: null,
         }));
       } catch (error) {
+        if (controller.signal.aborted || generation !== streamGenerationRef.current) return;
         const errorMessage =
           error instanceof ApiError
             ? error.detail
@@ -150,6 +160,7 @@ export function useChat(): UseChatReturn {
       ...prev,
       isLoading: false,
       streamingAnswer: null,
+      statusMessage: null,
     }));
   }, []);
 

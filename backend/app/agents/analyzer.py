@@ -26,7 +26,7 @@ class AnalyzerAgent(BaseAgent):
         filtered_chunks = analyzer.execute(chunks, context)
     """
 
-    def __init__(self, min_content_length: int = 50):
+    def __init__(self, min_content_length: int = 1):
         """
         Initialize the analyzer agent.
 
@@ -67,7 +67,7 @@ class AnalyzerAgent(BaseAgent):
             content_hash = (
                 chunk.metadata.get("source_file"),
                 " ".join(content.split()),
-            )  # Use first 100 chars for dedup
+            )
             if content_hash in seen_content:
                 continue
 

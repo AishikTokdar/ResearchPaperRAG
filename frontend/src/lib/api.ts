@@ -29,6 +29,16 @@ export class ApiError extends Error {
   }
 }
 
+function errorDetail(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) return value.slice(0, 500);
+  if (Array.isArray(value)) {
+    const messages = value.flatMap((item) =>
+      item && typeof item === "object" && "msg" in item && typeof item.msg === "string" ? [item.msg] : []);
+    if (messages.length) return messages.join("; ").slice(0, 500);
+  }
+  return fallback;
+}
+
 function withSessionHeaders(init?: RequestInit): RequestInit {
   const sid = getChatApiSessionId();
   if (!isValidChatApiSessionId(sid)) {
@@ -59,15 +69,15 @@ async function fetchWithErrorHandling<T>(
   options?: RequestInit,
 ): Promise<T> {
   try {
-    const response = await fetch(url, withSessionHeaders({ ...options, signal: options?.signal ?? AbortSignal.timeout(180000) }));
+    const timeout = AbortSignal.timeout(180000);
+    const signal = options?.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    const response = await fetch(url, withSessionHeaders({ ...options, signal }));
 
     if (!response.ok) {
       const errorData: APIError = await response.json().catch(() => ({
         detail: `HTTP error ${response.status}`,
       }));
-      const detail = typeof errorData.detail === "string" ? errorData.detail
-        : Array.isArray(errorData.detail) ? (errorData.detail as { msg?: string }[]).map(item => item.msg || "Invalid input").join("; ").slice(0, 500)
-        : `HTTP error ${response.status}`;
+      const detail = errorDetail(errorData.detail, `HTTP error ${response.status}`);
       throw new ApiError(detail, response.status, detail);
     }
 
@@ -116,7 +126,7 @@ export function streamQuestion(
 
       if (!response.ok || !response.body) {
         const err = await response.json().catch(() => ({ detail: "Stream failed" }));
-        callbacks.onError(err.detail ?? "Stream failed");
+        callbacks.onError(errorDetail(err.detail, "Stream failed"));
         return;
       }
 
@@ -201,6 +211,7 @@ export const api = {
     model?: string,
     includeSources: boolean = true,
     hybridMode: boolean = false,
+    signal?: AbortSignal,
   ): Promise<AskQuestionResponse> {
     const requestBody: AskQuestionRequest = {
       question,
@@ -216,17 +227,19 @@ export const api = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
+        signal,
       },
     );
   },
 
-  async searchPapers(query: string, limitPerSource: number = 4): Promise<PaperSearchResponse> {
+  async searchPapers(query: string, limitPerSource: number = 4, signal?: AbortSignal): Promise<PaperSearchResponse> {
     return fetchWithErrorHandling<PaperSearchResponse>(
       joinApiUrl(API_ENDPOINTS.PAPER_SEARCH),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, limit_per_source: limitPerSource }),
+        signal,
       },
     );
   },
@@ -263,8 +276,8 @@ export const api = {
     );
   },
 
-  async clearFollowup(): Promise<void> {
-    await fetchWithErrorHandling(joinApiUrl(API_ENDPOINTS.CHAT_FOLLOWUP), { method: "DELETE" });
+  async clearFollowup(signal?: AbortSignal): Promise<void> {
+    await fetchWithErrorHandling(joinApiUrl(API_ENDPOINTS.CHAT_FOLLOWUP), { method: "DELETE", signal });
   },
 
   async chatFollowup(
@@ -272,6 +285,7 @@ export const api = {
     provider: string = "gemini",
     modelName: string = DEFAULT_MODEL_ID,
     apiKey?: string,
+    signal?: AbortSignal,
   ): Promise<ChatFollowupResponse> {
     return fetchWithErrorHandling<ChatFollowupResponse>(
       joinApiUrl(API_ENDPOINTS.CHAT_FOLLOWUP),
@@ -284,6 +298,7 @@ export const api = {
           model_name: modelName,
           api_key: apiKey,
         }),
+        signal,
       },
     );
   },

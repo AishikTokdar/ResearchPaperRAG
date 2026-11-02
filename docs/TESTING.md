@@ -16,6 +16,8 @@ The checker runs Ruff, mypy and unittest discovery from `backend`. `BACKEND_PYTH
 
 Tests cover session isolation/eviction, safe downloads, body/resource limits, CORS/hosts, provider serialization, real MiniLM token bounds, PDF subprocesses, FAISS persistence/retrieval, JSON/SSE chat, mixed-source reports, follow-up/clear, cache invalidation and cancellation/backpressure. Generation/download boundaries are deterministic. The tokenizer may download initially; tests do not download embedding weights or consume paid inference.
 
+`tests/test_report_resilience.py` checks compound citations, equivalent numeric formats, unsupported/uncited passages, retained report sections, valid Markdown tables, hostile exponents, empty section headings, cache eligibility, abstract coverage, provider interruption and preservation of short PDF results. These are deterministic regressions, not a live-provider quality benchmark.
+
 `backend/tests/integration_server.py` is a loopback-only fixture. Never deploy it: it substitutes external generation/download/embedding boundaries and exposes a test PDF route. Other app/parser/FAISS/session/SSE behavior is real.
 
 ## Frontend
@@ -30,6 +32,8 @@ npm run build
 ```
 
 Node tests cover export injection, SSE framing/interruption, trusted ingestion contracts, progress, notice removal, telemetry, production API origin safety and stable/reset session capabilities.
+
+Request-lifecycle regressions check readable streamed validation errors, propagated cancellation, and late PDF-chat answers after clearing. Browser integration also delays real search/clear responses to check PDF selection capacity during an in-flight search and prevent a new follow-up while chat history is being cleared.
 
 ## Browser with the real backend
 

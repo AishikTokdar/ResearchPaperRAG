@@ -125,7 +125,7 @@ class Settings(BaseSettings):
     report_max_tokens: int = Field(default=3500, ge=512, le=8192)
     followup_max_tokens: int = Field(default=800, ge=128, le=4096)
     llm_max_attempts: int = Field(default=3, ge=1, le=6)
-    llm_timeout_seconds: float = Field(default=30, ge=1, le=120)
+    llm_timeout_seconds: float = Field(default=45, ge=1, le=120)
     llm_request_deadline_seconds: float = Field(default=60, ge=1, le=180)
     max_concurrent_requests: int = Field(default=4, ge=1, le=32)
     max_pdf_pages: int = Field(default=200, ge=1, le=1000)

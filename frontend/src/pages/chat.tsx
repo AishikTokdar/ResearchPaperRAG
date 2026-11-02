@@ -59,6 +59,10 @@ export function ChatPage() {
   const [selectedPaperIds, setSelectedPaperIds] = React.useState<Set<string>>(new Set());
 
   const [uploadedFiles, setUploadedFiles] = React.useState<File[]>([]);
+  const uploadedFilesRef = React.useRef(uploadedFiles);
+  uploadedFilesRef.current = uploadedFiles;
+  const searchController = React.useRef<AbortController | null>(null);
+  const followupController = React.useRef<AbortController | null>(null);
 
   const [activeTab, setActiveTab] = React.useState<"search" | "upload">("search");
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
@@ -70,7 +74,11 @@ export function ChatPage() {
   const [estimatedDuration, setEstimatedDuration] = React.useState(90);
   const [clock, setClock] = React.useState(Date.now());
   const analysisController = React.useRef<AbortController | null>(null);
-  React.useEffect(() => () => analysisController.current?.abort(), []);
+  React.useEffect(() => () => {
+    analysisController.current?.abort();
+    searchController.current?.abort();
+    followupController.current?.abort();
+  }, []);
   React.useEffect(() => {
     if (!isAnalyzing) return;
     const interval = window.setInterval(() => setClock(Date.now()), 1000);
@@ -105,6 +113,7 @@ export function ChatPage() {
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (searchController.current) return;
     if (!topicQuery.trim()) {
       toast.error("Please enter a research topic or question.");
       return;
@@ -113,8 +122,11 @@ export function ChatPage() {
     setSearchError(null);
     setSearchNotice(null);
     setIsSearching(true);
+    const controller = new AbortController();
+    searchController.current = controller;
     try {
-      const res = await api.searchPapers(topicQuery.trim(), paperLimit);
+      const res = await api.searchPapers(topicQuery.trim(), paperLimit, controller.signal);
+      if (controller.signal.aborted) return;
       const recentPapers = res.papers.filter((p) => {
         try {
           const y = intVal(p.year);
@@ -132,7 +144,7 @@ export function ChatPage() {
       );
       setHasSearched(true);
       setFetchedPapers(recentPapers);
-      const initialSelected = new Set(recentPapers.slice(0, Math.max(0, MAX_SELECTED_PAPERS - uploadedFiles.length)).map((p) => p.id));
+      const initialSelected = new Set(recentPapers.slice(0, Math.max(0, MAX_SELECTED_PAPERS - uploadedFilesRef.current.length)).map((p) => p.id));
       setSelectedPaperIds(initialSelected);
 
       if (recentPapers.length > 0) {
@@ -141,10 +153,12 @@ export function ChatPage() {
         toast.warning(`No papers found matching your topic from ${MIN_YEAR} to ${CURRENT_YEAR}.`);
       }
     } catch (err) {
+      if (controller.signal.aborted) return;
       const message = (err as Error).message || "Failed to fetch research papers.";
       setSearchError(message);
       toast.error(message);
     } finally {
+      searchController.current = null;
       setIsSearching(false);
     }
   };
@@ -243,7 +257,10 @@ export function ChatPage() {
         model: activeModelObj.id,
         paperIds: selectedFetchedPapers.map(({ id }) => id),
         files: uploadedFiles,
-      }, (update) => setAnalysisProgress((current) => mergeAnalysisProgress(current, update)), controller.signal);
+      }, (update) => {
+        if (!controller.signal.aborted) setAnalysisProgress((current) => mergeAnalysisProgress(current, update));
+      }, controller.signal);
+      if (controller.signal.aborted) return;
       setAnalysisProgress((current) => ({ ...mergeAnalysisProgress(current, result.progress), stage: "complete", percent: 100 }));
       setAnalysisStatus("complete");
       setReport(result.report);
@@ -262,7 +279,9 @@ export function ChatPage() {
 
   const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isAsking || isAnalyzing || !report) return;
+    if (!chatInput.trim() || followupController.current || isAsking || isAnalyzing || !report) return;
+    const controller = new AbortController();
+    followupController.current = controller;
 
     const q = chatInput.trim();
     setChatInput("");
@@ -272,7 +291,8 @@ export function ChatPage() {
     setIsAsking(true);
 
     try {
-      const res = await api.chatFollowup(q, activeModelObj.provider, activeModelObj.id);
+      const res = await api.chatFollowup(q, activeModelObj.provider, activeModelObj.id, undefined, controller.signal);
+      if (controller.signal.aborted) return;
       const assistantMsg: ChatMessageItem = {
         id: String(Date.now() + 1),
         sender: "assistant",
@@ -280,8 +300,10 @@ export function ChatPage() {
       };
       setChatMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
+      if (controller.signal.aborted) return;
       toast.error((err as Error).message || "Chat query failed.");
     } finally {
+      followupController.current = null;
       setIsAsking(false);
     }
   };
@@ -633,13 +655,21 @@ export function ChatPage() {
                     size="sm"
                     disabled={isAsking || isAnalyzing}
                     onClick={async () => {
+                      if (followupController.current) return;
+                      const controller = new AbortController();
+                      followupController.current = controller;
+                      setIsAsking(true);
                       try {
-                        await api.clearFollowup();
+                        await api.clearFollowup(controller.signal);
+                        if (controller.signal.aborted) return;
                         setChatMessages([]);
                         setChatInput("");
                         toast.info("Follow-up chat history cleared.");
                       } catch {
-                        toast.error("Chat history could not be cleared. Please retry.");
+                        if (!controller.signal.aborted) toast.error("Chat history could not be cleared. Please retry.");
+                      } finally {
+                        followupController.current = null;
+                        setIsAsking(false);
                       }
                     }}
                     className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 gap-1"

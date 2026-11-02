@@ -142,6 +142,74 @@ test("schema validation errors show useful text instead of object placeholders",
   }
 });
 
+test("streamed validation errors are readable strings", async () => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({ detail: [null, { msg: "Question is too long" }] }, { status: 422 });
+  try {
+    const error = await new Promise((resolve, reject) => api.streamQuestion({ question: "q" }, {
+      onToken: () => {}, onDone: () => reject(new Error("Unexpected completion")), onError: resolve,
+    }));
+    assert.equal(error, "Question is too long");
+  } finally { globalThis.fetch = previous; }
+});
+
+test("search and follow-up forward caller cancellation signals", async () => {
+  const previous = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (_url, options) => {
+    requests.push(options.signal);
+    return Response.json({ papers: [], answer: "Supported" });
+  };
+  try {
+    const controller = new AbortController();
+    await api.api.searchPapers("topic", 3, controller.signal);
+    await api.api.chatFollowup("question", "gemini", "test", undefined, controller.signal);
+    assert.equal(requests.length, 2);
+    assert.ok(requests.every(signal => !signal.aborted));
+    controller.abort();
+    assert.ok(requests.every(signal => signal.aborted));
+  } finally { globalThis.fetch = previous; }
+});
+
+test("cleared PDF chat cannot be repopulated by a late JSON answer, and unmount cancels streams", async () => {
+  const hooks = await load("src/hooks/use-chat.ts", [{
+    name: "isolated-chat-lifecycle",
+    setup(plugin) {
+      plugin.onResolve({ filter: /^(react|@\/lib\/api)$/ }, ({ path: name }) => ({ path: name, namespace: "chat-lifecycle" }));
+      plugin.onLoad({ filter: /.*/, namespace: "chat-lifecycle" }, ({ path: name }) => ({ contents: name === "react" ? `
+        export const useState = initial => { globalThis.__chatState = initial; return [initial, update => {
+          globalThis.__chatState = typeof update === 'function' ? update(globalThis.__chatState) : update;
+        }]; };
+        export const useRef = current => ({current});
+        export const useCallback = callback => callback;
+        export const useEffect = setup => { globalThis.__chatCleanup = setup(); };
+      ` : `
+        export class ApiError extends Error {};
+        export const api = { askQuestion: (...args) => {
+          globalThis.__chatSignal = args[4];
+          return new Promise(resolve => { globalThis.__resolveChat = resolve; });
+        } };
+        export const streamQuestion = () => (globalThis.__chatStream = new AbortController());
+      `, loader: "js" }));
+    },
+  }]);
+  try {
+    const chat = hooks.useChat();
+    const pending = chat.sendMessage("question");
+    chat.clearHistory();
+    assert.equal(globalThis.__chatSignal.aborted, true);
+    globalThis.__resolveChat({ answer: "Old response" });
+    await pending;
+    assert.deepEqual(globalThis.__chatState.chatHistory, []);
+    assert.equal(globalThis.__chatState.isLoading, false);
+    chat.sendMessageStreaming("question");
+    globalThis.__chatCleanup();
+    assert.equal(globalThis.__chatStream.signal.aborted, true);
+  } finally {
+    for (const key of ["__chatState", "__chatCleanup", "__chatSignal", "__resolveChat", "__chatStream"]) delete globalThis[key];
+  }
+});
+
 test("PDF export rejects script links and escapes attribute quotes", async () => {
   const html = await renderer.renderMarkdownToHtmlString('[bad](javascript:alert) [safe](https://example.org/paper) [quoted](https://example.org/"onmouseover="alert)');
   assert.ok(!html.includes('href="javascript:'));

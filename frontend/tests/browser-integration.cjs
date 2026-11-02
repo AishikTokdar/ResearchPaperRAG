@@ -41,13 +41,52 @@ async function main() {
     await input.press("Enter");
     assert.equal((await followupResponse).status(), 200);
     await page.getByText("The evaluated retrieval method measured accuracy of 91%", { exact: false }).last().waitFor();
+    let releaseClear;
+    let clearStarted;
+    const clearGate = new Promise(resolve => { releaseClear = resolve; });
+    const clearing = new Promise(resolve => { clearStarted = resolve; });
+    await page.route("**/api/chat/followup", async route => {
+      if (route.request().method() !== "DELETE") return route.continue();
+      const response = await route.fetch();
+      clearStarted();
+      await clearGate;
+      await route.fulfill({ response });
+    });
     const cleared = page.waitForResponse(response => response.url().endsWith("/api/chat/followup") && response.request().method() === "DELETE");
     await page.getByRole("button", { name: "Clear Chat", exact: true }).click();
+    await clearing;
+    assert.equal(await input.isDisabled(), true, "Follow-up must wait for history clearing");
+    releaseClear();
     assert.equal((await cleared).status(), 200);
     const before = await page.evaluate(() => localStorage.getItem("research-paper-rag-api-session-id"));
     await page.getByRole("button", { name: "Clear Session", exact: true }).click();
     const after = await page.evaluate(() => localStorage.getItem("research-paper-rag-api-session-id"));
     assert.notEqual(after, before);
+
+    // Attach a PDF while a search is in flight; late results must reserve its slot.
+    const racePage = await browser.newPage();
+    let releaseSearch;
+    let searchStarted;
+    const searchGate = new Promise(resolve => { releaseSearch = resolve; });
+    const searching = new Promise(resolve => { searchStarted = resolve; });
+    await racePage.route("**/api/papers/search", async route => {
+      const response = await route.fetch();
+      searchStarted();
+      await searchGate;
+      await route.fulfill({ response });
+    });
+    await racePage.goto(`${origin}/chat`);
+    await racePage.getByRole("button", { name: "Search Research Papers", exact: true }).click();
+    await searching;
+    await racePage.getByRole("button", { name: "Upload PDFs", exact: true }).click();
+    await racePage.getByLabel("Upload Custom Research Papers (PDF)").setInputFiles({
+      name: "late-search.PDF", mimeType: "application/pdf", buffer: Buffer.from(pdf),
+    });
+    releaseSearch();
+    await racePage.getByRole("button", { name: "Academic Search", exact: true }).click();
+    await racePage.getByText("Fetched Papers (5)", { exact: true }).waitFor();
+    assert.equal(await racePage.getByRole("button", { name: /^Deselect Retrieval evaluation/ }).count(), 4);
+    await racePage.close();
     await page.goto(`${origin}/api-status`);
     await page.getByText("224 tokens", { exact: true }).waitFor();
     await page.getByText("32 tokens", { exact: true }).waitFor();

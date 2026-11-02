@@ -323,7 +323,7 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                                 "content": chunk.content,
                                 "model_used": model_id,
                             }
-                if not answer:
+                if not answer.strip():
                     raise ValueError("Provider returned no text")
                 record_success(provider.name, model_id)
                 warnings = []
@@ -338,7 +338,16 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                 return
             except Exception as exc:
                 self._failure(provider, model_id, signature, exc)
-                if answer:
+                if answer.strip():
+                    if feature == "gap_report_stream":
+                        # Retain the report draft for local passage validation.
+                        # Never append another provider's answer to this draft.
+                        yield {
+                            "type": "complete", "model_used": model_id,
+                            "answer": answer,
+                            "warnings": ["Generation was interrupted; this report is incomplete. Retry to generate the remaining sections."],
+                        }
+                        return
                     raise RuntimeError("The response was interrupted. Please retry.") from None
         raise RuntimeError("AI service is temporarily unavailable. Please try again shortly.")
 

@@ -45,6 +45,10 @@ For uploads alone use `paper_ids=[]`. PowerShell users should invoke `curl.exe` 
 
 Research SSE emits `progress`, `heartbeat`, `done`, `error`. Progress includes weighted milestone `percent`, stage/message, elapsed seconds and, when observed, current/completed sections and drafted word counts. Milestone percentages and ETA are estimates. Only `done` means completion and carries the final grounded report; `limited` marks partial/insufficient evidence. EOF without `done`/`error` is an interruption. Disconnects cancel generation and signal preparation cancellation between documents/stages; already running CPU work retains its worker slot until exit.
 
+Reports retain independently supported passages when another passage fails citation or numeric validation. Rejected passages are replaced with an explicit “Insufficient evidence to verify this passage” notice. Affected or empty sections are not marked complete, and incomplete/rejected reports are not cached. Abstract-only and partial-PDF coverage sets `limited` on both fresh and cached responses. Clearly labeled proposals and the hypothesis table are suggestions rather than established findings; unrelated uncited source claims remain blocked.
+
+If a provider interrupts an already-started research report, the backend validates the draft locally and returns the supported portion with an incomplete-report warning and `limited: true`. It does not append a second provider's output or spend another generation call to repair the draft. Failure before usable text still uses bounded failover. Legacy PDF chat retains its interruption error contract. A provider or proxy connection loss before the browser receives a terminal event remains an interruption, not successful completion.
+
 PDF chat SSE emits `status`, `token`, optional `warning`, `done`, `error`. Tokens are provisional. `done.answer` replaces them with the citation-checked answer and includes model, time, sources and warnings. Do not concatenate a failed partial response with another model's answer.
 
 ## Knowledge modes and availability

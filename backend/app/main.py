@@ -65,6 +65,8 @@ SERVER_BOOT_ID = str(uuid.uuid4())
 
 
 def print_startup_api_key_status():
+    if os.getenv("HF_API_KEY") and not os.getenv("HF_TOKEN"):
+        os.environ["HF_TOKEN"] = os.getenv("HF_API_KEY", "")
     provider_names = [
         ("gemini", "Google Gemini"),
         ("groq", "Groq"),
