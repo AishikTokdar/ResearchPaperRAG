@@ -204,7 +204,7 @@ export function sanitizeReportMarkdown(raw: string): string {
   // 2. Clean prompt artifact shorthand from bullet headers, e.g. "• P1 / P4 (Title) –" -> "• **Title** –"
   cleaned = cleaned.replace(
     /(^|\n)(\s*[-*•]\s*)(?:(?:Source\s+)?P\d+(?:\s*[/,-]\s*(?:P\d+|E\d+))*\s*[:\-–—]?\s*)(?:\(([^)\n]+)\)|([^\n–—:-]+[:\-–—]))/gi,
-    (m, p1, p2, p3, p4) => {
+    (_m, p1, p2, p3, p4) => {
       const title = (p3 || p4 || "").trim();
       if (!title) return `${p1}${p2}`;
       if (title.startsWith("**") && title.endsWith("**")) return `${p1}${p2}${title}`;

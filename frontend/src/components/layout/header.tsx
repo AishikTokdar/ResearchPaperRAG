@@ -26,19 +26,12 @@ import { joinApiUrl } from "@/lib/constants";
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const location = useLocation();
-  const { status, isOffline, isProlongedOffline, isChecking, checkNow } = useHealth();
+  const { status, isProlongedOffline, isChecking, checkNow } = useHealth();
   const { isDark, toggleTheme } = useTheme();
 
   React.useEffect(() => {
     setIsMenuOpen(false);
   }, [location.pathname]);
-
-  const healthColor =
-    status === "connected"
-      ? "bg-emerald-500"
-      : status === "disconnected"
-        ? "bg-red-500"
-        : "bg-amber-500 animate-pulse";
 
   return (
     <motion.header

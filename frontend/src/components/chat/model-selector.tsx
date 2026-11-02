@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Check, AlertCircle, CheckCircle2, Sparkles, Zap, Layers, Globe, Filter } from "lucide-react";
+import { ChevronDown, Check, AlertCircle, CheckCircle2, Sparkles, Zap, Layers, Globe, Filter, Cpu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AI_MODELS, type AIModel, type AIProvider } from "@/types";
 import { API_ENDPOINTS, joinApiUrl } from "@/lib/constants";

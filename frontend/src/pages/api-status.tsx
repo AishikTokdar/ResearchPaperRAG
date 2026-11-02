@@ -9,7 +9,6 @@ import {
   ServerOff,
   ShieldCheck,
   Cpu,
-  AlertTriangle,
 } from "lucide-react";
 import { PageWrapper, SectionWrapper } from "@/components/layout/page-wrapper";
 import { GlassCard, GlassCardContent } from "@/components/ui/glass-card";

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles, Cpu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AI_MODELS } from "@/types";
 

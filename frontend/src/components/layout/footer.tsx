@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Github, Linkedin, BookOpen } from "lucide-react";
+import { Github, Linkedin } from "lucide-react";
 import {
   APP_CONFIG,
   NAV_LINKS,
