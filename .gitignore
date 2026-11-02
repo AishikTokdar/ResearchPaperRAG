@@ -108,6 +108,7 @@ temp/
 *.tmp
 *.temp
 *.bak
+.comment_backups/
 
 # ============================================================================
 # Docker & Deployment Artifacts

@@ -1,14 +1,17 @@
 {
   "name": "research-paper-rag",
   "private": true,
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
+    "build": "npm --prefix frontend run build && node -e \"const fs=require('fs'); fs.cpSync('frontend/dist', 'dist', {recursive:true});\"",
+    "build:all": "npm run check && npm run build",
     "check": "npm run check:frontend && npm run check:backend",
     "lint": "npm run lint:frontend && npm run lint:backend",
     "lint:frontend": "npm --prefix frontend run lint",
-    "lint:backend": "bash scripts/check-backend.sh",
-    "check:frontend": "npm --prefix frontend run typecheck && npm --prefix frontend run lint",
-    "check:backend": "bash scripts/check-backend.sh",
-    "build": "npm --prefix frontend run build",
-    "build:all": "npm run check && npm run build"
+    "lint:backend": "node scripts/check-backend.mjs",
+    "check:frontend": "npm --prefix frontend run typecheck && npm --prefix frontend run lint && npm --prefix frontend run test:security",
+    "check:backend": "node scripts/check-backend.mjs"
   }
 }

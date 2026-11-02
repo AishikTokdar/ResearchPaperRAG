@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!assets|favicon\\.ico|logo\\.svg|bg-images|.*\\.js|.*\\.css).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
