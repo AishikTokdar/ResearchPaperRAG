@@ -1,5 +1,7 @@
 # Verification
 
+See the [live API integration check](LIVE_API_CHECK.md) for the local-frontend review against the deployed Hugging Face API, including observed results and deployment settings that still need attention.
+
 ## Backend
 
 Activate Python and install `backend/requirements-dev.txt`. From the repository root:
@@ -36,6 +38,10 @@ npm run build
 Node tests cover export injection, SSE framing/interruption, trusted ingestion contracts, progress, notice removal, telemetry, production API origin safety and stable/reset session capabilities.
 
 Request-lifecycle regressions check readable streamed validation errors, propagated cancellation, and late PDF-chat answers after clearing. Browser integration also delays real search/clear responses to check PDF selection capacity during an in-flight search and prevent a new follow-up while chat history is being cleared.
+
+Workspace usability checks preserve the report topic when the next search is edited, prevent unchanged model saves from clearing work, retain failed follow-up drafts and keep provider filtering separate from model selection. These were reproduced and rechecked interactively in the browser; populated workspace reflow was measured at 320, 375, 768 and 1440 pixels, with keyboard Escape/focus checks on the model picker.
+
+Export checks cover plain TXT without Markdown decoration, preserved headings/table contents/source URLs, and actual MD/TXT/PDF browser downloads in dark mode. PDF changes were additionally checked by rendering every page of a downloaded multi-page report and inspecting text visibility, table rows, page transitions and clickable link annotations.
 
 ## Browser with the real backend
 

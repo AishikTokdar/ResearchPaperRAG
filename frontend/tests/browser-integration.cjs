@@ -2,6 +2,7 @@
  * See docs/TESTING.md. External inference and downloads are deterministic fixtures.
  */
 const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
 
 async function main() {
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || "playwright");
@@ -35,7 +36,47 @@ async function main() {
     await run.click();
     await page.getByText("The evaluated retrieval method measured accuracy of 91%", { exact: false }).first().waitFor({ timeout: 60000 });
     assert.ok(await page.getByText("91%", { exact: false }).count());
+    assert.equal(await page.getByRole("button", { name: "Save Model", exact: true }).isDisabled(), true);
+    const topicInput = page.getByLabel("Research topic", { exact: true });
+    const originalTopic = await topicInput.inputValue();
+    await topicInput.fill("A different topic for the next search");
+    assert.ok((await page.locator("#report").innerText()).includes(originalTopic), "Editing a search must not rename the existing report");
+    await topicInput.fill(originalTopic);
+    const modelTrigger = page.getByRole("button", { name: "Choose analysis model", exact: true });
+    const selectedModel = await modelTrigger.innerText();
+    await modelTrigger.click();
+    await page.getByLabel("Filter model providers").selectOption("groq");
+    await page.keyboard.press("Escape");
+    assert.equal(await modelTrigger.innerText(), selectedModel, "Provider filtering must not select a different model");
+    assert.equal(await modelTrigger.evaluate(element => element === document.activeElement), true);
+    // Exercise the actual download handlers, including PDF rendering in dark mode.
+    const originalClass = await page.locator("html").getAttribute("class");
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const format of ["Markdown", "text", "PDF"]) {
+      const downloading = page.waitForEvent("download", { timeout: 60000 });
+      await page.getByRole("button", { name: `Download ${format} report`, exact: true }).click();
+      const download = await downloading;
+      assert.equal(await download.failure(), null);
+      const bytes = await fs.readFile(await download.path());
+      if (format === "PDF") {
+        assert.equal(bytes.subarray(0, 5).toString(), "%PDF-");
+        assert.ok(bytes.length > 1000);
+      } else {
+        const content = bytes.toString("utf8");
+        assert.ok(content.includes("Literature Summary") && content.includes("Novel Paper Suggestions"));
+        assert.ok(content.includes("91%"));
+        if (format === "text") assert.ok(!content.includes("##") && !content.includes("**"));
+      }
+    }
+    await page.evaluate(value => { document.documentElement.className = value || ""; }, originalClass);
     const input = page.getByPlaceholder(/Ask a follow-up|Ask about|Ask a question/i);
+    const failFollowup = route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Temporary follow-up failure" }) });
+    await page.route("**/api/chat/followup", failFollowup);
+    await input.fill("Keep this question if sending fails");
+    await input.press("Enter");
+    await page.getByText("Temporary follow-up failure", { exact: true }).waitFor();
+    assert.equal(await input.inputValue(), "Keep this question if sending fails");
+    await page.unroute("**/api/chat/followup", failFollowup);
     await input.fill("What accuracy did they measure?");
     const followupResponse = page.waitForResponse(response => response.url().endsWith("/api/chat/followup") && response.request().method() === "POST");
     await input.press("Enter");

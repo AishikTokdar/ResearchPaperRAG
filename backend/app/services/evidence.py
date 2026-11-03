@@ -119,6 +119,9 @@ def _normalize_citations(answer: str) -> str:
 
 def resolve_citations(answer: str, citations: dict[str, str]) -> str:
     answer = _normalize_citations(answer)
+    # Some providers attach an evidence tag directly to the last word. Keep
+    # resolved filenames and source labels readable in follow-ups and exports.
+    answer = re.sub(r"(?<=[\w)*`])(?=\[E\d+\])", " ", answer)
     # Presentation cleanup only; never guess a paper number as a passage ID.
     answer = re.sub(
         r"(?m)^(\s*[-*•]\s*)(?:Source\s+)?P\d+(?:\s*[/,-]\s*(?:P\d+|E\d+))*\s*\(([^)\n]+)\)",

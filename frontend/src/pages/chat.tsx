@@ -85,6 +85,7 @@ export function ChatPage() {
     return () => window.clearInterval(interval);
   }, [isAnalyzing]);
   const [report, setReport] = React.useState<string | null>(null);
+  const [reportTopic, setReportTopic] = React.useState("");
 
   const [chatMessages, setChatMessages] = React.useState<ChatMessageItem[]>([]);
   const [chatInput, setChatInput] = React.useState("");
@@ -102,6 +103,7 @@ export function ChatPage() {
   const [expandedPaperId, setExpandedPaperId] = React.useState<string | null>(null);
 
   const handleSaveModel = () => {
+    if (selectedModelObj.id === activeModelObj.id) return;
     setActiveModelObj(selectedModelObj);
     setReport(null);
     setChatMessages([]);
@@ -243,6 +245,7 @@ export function ChatPage() {
     const controller = new AbortController();
     analysisController.current = controller;
     const started = Date.now();
+    const analysisTopic = topicQuery.trim() || "Research Paper Analysis";
     setAnalysisStartedAt(started);
     setAnalysisFinishedAt(null);
     setClock(started);
@@ -252,7 +255,7 @@ export function ChatPage() {
     setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS);
     try {
       const result = await api.runAnalysis({
-        topic: topicQuery.trim() || "Research Paper Analysis",
+        topic: analysisTopic,
         provider: activeModelObj.provider,
         model: activeModelObj.id,
         paperIds: selectedFetchedPapers.map(({ id }) => id),
@@ -264,6 +267,7 @@ export function ChatPage() {
       setAnalysisProgress((current) => ({ ...mergeAnalysisProgress(current, result.progress), stage: "complete", percent: 100 }));
       setAnalysisStatus("complete");
       setReport(result.report);
+      setReportTopic(analysisTopic);
       toast.success(result.progress.limited ? "Report ready with limited source evidence." : "Research paper analysis and gap report generated.");
     } catch (err) {
       const message = controller.signal.aborted ? "Analysis stopped. You can run it again when ready." : (err as Error).message || "Failed to generate research report.";
@@ -301,6 +305,8 @@ export function ChatPage() {
       setChatMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
       if (controller.signal.aborted) return;
+      setChatInput(q);
+      setChatMessages((previous) => previous.filter((message) => message.id !== userMsg.id));
       toast.error((err as Error).message || "Chat query failed.");
     } finally {
       followupController.current = null;
@@ -357,7 +363,7 @@ export function ChatPage() {
             <Button
               type="button"
               size="sm"
-              disabled={isAnalyzing || isAsking}
+              disabled={isAnalyzing || isAsking || selectedModelObj.id === activeModelObj.id}
               onClick={handleSaveModel}
               variant="outline" className="gap-1.5 px-4"
             >
@@ -559,7 +565,7 @@ export function ChatPage() {
                       <button
                         type="button"
                         onClick={handleClearUploadedFiles}
-                        className="text-[11px] text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:underline flex items-center gap-1 font-medium"
+                        className="min-h-8 px-1 text-[11px] text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:underline flex items-center gap-1 font-medium"
                       >
                         <Trash2 className="w-3 h-3" /> Clear All
                       </button>
@@ -628,7 +634,7 @@ export function ChatPage() {
           <div className="workspace-report min-w-0 lg:col-span-7 xl:col-span-8 space-y-6">
             <div id="report" className="workspace-panel p-5 sm:p-8 space-y-4">
               {report ? (
-                <ReportRenderer report={report} topic={topicQuery} />
+                <ReportRenderer report={report} topic={reportTopic} />
               ) : analysisStatus === "running" || analysisStatus === "error" ? (
                 <ReportGenerationPreview progress={analysisProgress} status={analysisStatus} error={analysisError} />
               ) : (

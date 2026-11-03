@@ -124,18 +124,11 @@ export function ModelSelector({
   const handleSelectModel = (model: AIModel) => {
     onChange(model);
     setIsOpen(false);
+    triggerRef.current?.focus();
   };
 
   const handleProviderSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const prov = e.target.value;
-    setSelectedProviderFilter(prov);
-    if (prov !== "all") {
-      const provModels = sortedModels.filter((m) => m.provider === prov);
-      const readyModel = provModels.find((m) => m.isAvailable !== false) ?? provModels[0];
-      if (readyModel) {
-        onChange(readyModel);
-      }
-    }
+    setSelectedProviderFilter(e.target.value);
   };
 
   const SelectedIcon = providerLabels[selected?.provider]?.icon ?? Cpu;
@@ -269,7 +262,7 @@ export function ModelSelector({
                             type="button"
                             key={model.id}
                             aria-pressed={isSelected}
-                            onClick={() => { handleSelectModel(model); triggerRef.current?.focus(); }}
+                            onClick={() => handleSelectModel(model)}
                             className={cn(
                               "w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-all cursor-pointer select-none group",
                               isConfigured

@@ -133,6 +133,38 @@ class ReportTests(unittest.TestCase):
         self.assertIn(7, event["sections_completed"])
         self.assertNotIn(8, event["sections_completed"])
 
+    def test_successful_fallback_does_not_mark_a_complete_report_as_incomplete(self):
+        engine = self.engine()
+        self.mock_stream(engine, self.report(), ["A fallback model was used."])
+        event = self.collect(engine)
+        self.assertEqual(event["sections_completed"], list(range(1, 9)))
+        self.assertFalse(event["limited"])
+        self.assertIn("A fallback model was used.", event["report"])
+
+    def test_streaming_fallback_is_disclosed_in_the_final_response(self):
+        service = LLMService()
+        class BrokenLLM:
+            async def astream(self, *args, **kwargs):
+                raise RuntimeError("temporary provider failure")
+                yield  # Make this an async iterator, matching provider streaming.
+        class WorkingLLM:
+            async def astream(self, *args, **kwargs):
+                yield AIMessageChunk(content="Supported answer [E1].")
+        async def run():
+            attempts = [(AI_PROVIDERS["gemini"], "fixture", "key", 2.0, "sig", i) for i in (1, 2)]
+            with patch.object(service, "_attempts", return_value=iter(attempts)), patch.object(service, "_build_llm_with_key", side_effect=[BrokenLLM(), WorkingLLM()]), patch.object(service, "_failure"):
+                return [event async for event in service.stream_text([], DEFAULT_MODEL, "gap_report_stream", 100)]
+        events = asyncio.run(run())
+        self.assertEqual(events[-1]["type"], "complete")
+        self.assertIn("A fallback model was used.", events[-1]["warnings"])
+
+    def test_attached_citations_are_separated_from_bold_and_plain_text(self):
+        from app.services.evidence import resolve_citations
+        for answer in ("ORCHID-RIVER[E1].", "**ORCHID-RIVER**[E1].", "`ORCHID-RIVER`[E1]."):
+            with self.subTest(answer=answer):
+                resolved = resolve_citations(answer, {"E1": "[qa-fixture.pdf - Page 1]"})
+                self.assertIn(" [qa-fixture.pdf - Page 1]", resolved)
+
     def test_synchronous_report_uses_same_grounding_policy(self):
         engine = self.engine()
         engine.llm.generate_text = MagicMock(return_value=(self.report(2), "fixture", []))

@@ -329,6 +329,8 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                 warnings = []
                 if finish_reason == "length":
                     warnings.append("The answer reached its output limit and may be incomplete.")
+                if attempt > 1:
+                    warnings.append("A fallback model was used.")
                 yield {
                     "type": "complete",
                     "model_used": model_id,

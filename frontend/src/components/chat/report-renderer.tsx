@@ -10,6 +10,33 @@ interface ReportRendererProps {
   topic: string;
 }
 
+function reportToPlainText(markdown: string, topic: string): string {
+  const urls: string[] = [];
+  const text = sanitizeReportMarkdown(markdown)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label, url) => {
+      urls.push(url);
+      return `${label} (REPORTURL${urls.length - 1}TOKEN)`;
+    })
+    .split("\n")
+    .filter(line => !/^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/.test(line))
+    .map(line => {
+      if (line.trim().startsWith("|")) {
+        return line.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/)
+          .map(cell => cell.trim().replace(/\\\|/g, "|")).join("    ");
+      }
+      return line.replace(/^\s*#{1,6}\s+/, "").replace(/^\s*>\s?/, "")
+        .replace(/^\s*[-*•]\s+/, "  ");
+    })
+    .join("\n")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]/g, "$1")
+    .replace(/REPORTURL(\d+)TOKEN/g, (_match, index) => urls[Number(index)])
+    .replace(/\n{3,}/g, "\n\n").trim();
+  return `RESEARCH ANALYSIS & GAP REPORT\nTopic: ${topic}\n\n${text}\n`;
+}
+
 function getReportFilename(topic: string, ext: string): string {
   const cleanTopic = (topic || "research")
     .toLowerCase()
@@ -49,26 +76,7 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
   };
 
   const handleDownloadTxt = () => {
-    const sanitized = sanitizeReportMarkdown(report);
-    const plainText = sanitized
-      .replace(/^#\s+[^\n]+\n*/m, "")
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 (Link: $2)")
-      .replace(/\[\*\*([^*]+)\*\*\]/g, "$1")
-      .replace(/\[([^\]]+)\]/g, "$1")
-      .replace(/\*\*([^*]+)\*\*/g, "$1")
-      .replace(/\*([^*]+)\*/g, "$1")
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/^##\s*(.+)$/gm, "\n================================================================================\n$1\n================================================================================")
-      .replace(/^###\s*(.+)$/gm, "\n--- $1 ---")
-      .replace(/^[*-]\s+/gm, "  • ")
-      .replace(/^\d+\.\s+/gm, (m) => `  ${m}`)
-      .replace(/\|/g, "  ")
-      .replace(/^\s*[+•|]?\s*[-+=]{3,}.*$/gm, "")
-      .replace(/```[a-zA-Z]*/g, "")
-      .replace(/\n{3,}/g, "\n\n");
-
-    const header = `RESEARCH ANALYSIS & GAP REPORT\nTopic: ${topic}\n\n`;
-    const blob = new Blob([header + plainText.trim()], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([reportToPlainText(report, topic)], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -81,6 +89,7 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
     const parsedHtml = await renderMarkdownToHtmlString(report);
     const safeTopic = topic.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
     const container = document.createElement("div");
+    container.className = "report-pdf-export";
     container.style.padding = "24px";
     container.style.maxWidth = "800px";
     container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
@@ -89,6 +98,23 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
     container.style.lineHeight = "1.65";
 
     container.innerHTML = `
+      <style>
+        .report-pdf-export, .report-pdf-export * { color: #1f2937 !important; box-shadow: none !important; }
+        .report-pdf-export * { background: transparent !important; }
+        .report-pdf-export { background: #ffffff !important; width: 680px; max-width: none !important; font-size: 12px; }
+        .report-pdf-export h2 { font-size: 16px; margin: 20px 0 10px; break-after: avoid; page-break-after: avoid; }
+        .report-pdf-export h3 { font-size: 14px; margin: 14px 0 8px; break-after: avoid; page-break-after: avoid; }
+        .report-pdf-export p, .report-pdf-export li { line-height: 1.6; overflow-wrap: anywhere; break-inside: avoid; page-break-inside: avoid; }
+        .report-pdf-export p:has(> strong:only-child) { break-after: avoid; page-break-after: avoid; }
+        .report-pdf-export a { color: #1e40af !important; display: inline !important; overflow-wrap: anywhere; }
+        .report-pdf-export svg { display: none !important; }
+        .report-pdf-export table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; }
+        .report-pdf-export th, .report-pdf-export td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; overflow-wrap: anywhere; }
+        .report-pdf-export th { background: #f1f5f9 !important; }
+        .report-pdf-export tr { break-inside: avoid; page-break-inside: avoid; }
+        .report-pdf-export thead { display: table-header-group; }
+        .report-pdf-export .overflow-x-auto { overflow: visible !important; }
+      </style>
       <div style="border-bottom: 3px solid #4f46e5; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;">
         <div>
           <h1 style="font-size: 20px; font-weight: 800; color: #111827; margin: 0 0 4px 0;">Research Analysis & Gap Report</h1>
@@ -105,10 +131,26 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
 
     document.body.appendChild(container);
 
+    // html2pdf supports break-inside, but not break-after: avoid. Keep a
+    // heading and its introductory paragraph together instead of orphaning it.
+    for (const heading of container.querySelectorAll("h2, h3")) {
+      const first = heading.nextElementSibling;
+      if (!first?.matches("p")) continue;
+      const next = first.nextElementSibling;
+      const group = document.createElement("div");
+      group.style.breakInside = "avoid";
+      group.style.pageBreakInside = "avoid";
+      heading.before(group);
+      group.append(heading, first);
+      if (first.querySelector("strong:only-child") && next?.matches("p")) group.append(next);
+    }
+
     const opt = {
       margin: [12, 12, 15, 12] as [number, number, number, number],
       filename: getReportFilename(topic, "pdf"),
       image: { type: "jpeg" as const, quality: 0.98 },
+      pagebreak: { mode: ["css", "legacy"], avoid: ["tr", "h2", "h3", "p", "li"] },
+      enableLinks: true,
       html2canvas: { scale: 2, useCORS: true, logging: false },
       jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
     };
@@ -117,7 +159,7 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
     try {
       const { default: html2pdf } = await import("html2pdf.js");
       await html2pdf().set(opt).from(container).save();
-      toast.success("PDF report downloaded directly with clickable links!");
+      toast.success("PDF report downloaded with clickable links.");
     } catch {
       const printWin = window.open("", "_blank", "width=900,height=1000");
       if (printWin) {
@@ -129,6 +171,10 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
               <style>
                 body { font-family: sans-serif; padding: 20px; color: #1f2937; }
                 a { color: #4f46e5; text-decoration: underline; }
+                table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                th, td { border: 1px solid #cbd5e1; padding: 8px; overflow-wrap: anywhere; vertical-align: top; }
+                tr { break-inside: avoid; } h2, h3 { break-after: avoid; }
+                svg { display: none; }
               </style>
             </head>
             <body>
@@ -142,6 +188,8 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
           </html>
         `);
         printWin.document.close();
+      } else {
+        toast.error("PDF export failed and the print window was blocked. Please allow pop-ups and retry.");
       }
     } finally {
       if (document.body.contains(container)) {

@@ -4,7 +4,7 @@
 
 Upload the contents of the entire `backend` folder directly to the root of your Gradio Space, as before. Its `README.md` already contains the SDK metadata; default `requirements.txt` includes Gradio/Spaces and the API dependency profile. **No packaging script is required.** Keep `app.py`, `app/` and both requirements files at the Space root. Exclude local secrets, virtual environments, indexes and caches.
 
-The entrypoint serves the real FastAPI routes on port 7860 and mounts the Gradio status interface at `/gradio/`; the README `base_path` opens that interface. MiniLM remains local CPU inference: GPU hardware is not required. The separate `gradio_app.py` compatibility PDF UI is also retained, but use `app.py` for the Cloudflare-connected research API.
+The entrypoint serves the real FastAPI routes on port 7860 and keeps Gradio mounted at `/`. Its configuration and API metadata are available at `/config` and `/gradio_api/info`. Keep the existing Space SDK settings and launcher behavior; a separate `/gradio/` route is not required. MiniLM remains local inference. The separate `gradio_app.py` compatibility PDF UI is also retained, but use `app.py` for the Cloudflare-connected research API.
 
 In Space **Settings → Variables and secrets** configure:
 
@@ -17,7 +17,7 @@ In Space **Settings → Variables and secrets** configure:
 
 The platform-provided `SPACE_HOST` is also accepted automatically after validating its `.hf.space` hostname. Use the actual runtime domain from your Space, not the `huggingface.co/spaces/...` repository page. Do not use wildcard CORS values; add preview deployment origins explicitly if needed. API keys stay on Hugging Face, never in frontend settings.
 
-Confirm `https://YOUR-SPACE.hf.space/health`, `/docs`, and `/gradio/` respond. Browser access requires a publicly reachable Space or a separately configured authenticated gateway; never embed an HF access token in frontend assets. Sleeping/restarting Spaces may cold-start and lose in-memory sessions; search/analyze again after restart. Default local disk is not a durability promise. Gradio's optional dependency advisory constraints remain documented in the dependency review.
+Confirm `https://YOUR-SPACE.hf.space/health`, `/docs`, `/config` and `/gradio_api/info` respond. Browser access requires a publicly reachable Space or a separately configured authenticated gateway; never embed an HF access token in frontend assets. Sleeping/restarting Spaces may cold-start and lose in-memory sessions; search/analyze again after restart. Default local disk is not a durability promise. Gradio's optional dependency advisory constraints remain documented in the dependency review.
 
 ## Cloudflare Pages
 

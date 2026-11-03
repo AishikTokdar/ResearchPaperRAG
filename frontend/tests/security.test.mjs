@@ -24,7 +24,7 @@ const renderer = await load("src/components/chat/report-renderer.tsx", [{
   name: "expose-export-renderer",
   setup(plugin) {
     plugin.onLoad({ filter: /report-renderer\.tsx$/ }, async ({ path: file }) => ({
-      contents: (await readFile(file, "utf8")) + "\nexport { renderMarkdownToHtmlString };", loader: "tsx",
+      contents: (await readFile(file, "utf8")) + "\nexport { renderMarkdownToHtmlString, reportToPlainText };", loader: "tsx",
     }));
   },
 }]);
@@ -138,6 +138,15 @@ test("report tables retain their separator and first proposed project", async ()
   assert.equal((html.match(/<table/g) || []).length, 1);
   assert.ok(html.includes("<h2") && !html.includes("## 8."));
   assert.ok(html.includes("<td") && html.includes("First project") && html.includes("Second project"));
+});
+
+test("TXT export keeps all heading levels and table contents without Markdown decoration", () => {
+  const report = "## 1. Literature Summary\n\n**Result** and *interpretation* with `EEG`.\n\n### Review details\n\n- Keep this finding [Source 1](https://example.org/paper_name).\n\n## 8. Novel Paper Suggestions\n\n| Proposed Title | Core Idea | Expected Outcome (hypothesis) |\n|---|---|---|\n| First project | Compare methods | May improve robustness |\n\n**General guidance (not findings from the selected papers)**\n\nReview external validity.\n\n## Sources\n\n- **Source 1:** [Full paper title](https://example.org/paper_name)";
+  const text = renderer.reportToPlainText(report, "EEG evaluation");
+  for (const expected of ["1. Literature Summary", "Review details", "8. Novel Paper Suggestions", "First project", "May improve robustness", "General guidance", "Full paper title", "https://example.org/paper_name"]) assert.ok(text.includes(expected), expected);
+  assert.ok(!/##|\*\*|`|\|---|={3,}|\[Source/.test(text));
+  assert.ok(!text.includes("|"));
+  assert.ok(text.includes("Proposed Title    Core Idea    Expected Outcome"));
 });
 
 test("citation clusters are deduplicated and guidance stays outside bullet lists", async () => {

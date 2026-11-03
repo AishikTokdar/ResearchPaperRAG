@@ -322,6 +322,7 @@ class GapAnalyzerEngine:
         seen: list[int] = []
         last_update = 0.0
         warnings = []
+        incomplete = False
         yield {
             "stage": "generate",
             "percent": 60,
@@ -365,12 +366,13 @@ class GapAnalyzerEngine:
             elif event["type"] == "complete":
                 draft = event["answer"]
                 warnings = event.get("warnings", [])
+                incomplete = any(warning != "A fallback model was used." for warning in warnings)
         yield {
             "stage": "verify",
             "percent": 95,
             "message": "Checking citation IDs and preparing the final report",
             "sections_started": seen,
-            "sections_completed": seen[:-1] if warnings else seen,
+            "sections_completed": seen[:-1] if incomplete else seen,
             "words_generated": len(draft.split()),
         }
         report = ground_answer(draft, citations, docs, preserve_valid_blocks=True, allow_proposals=True, allow_general_guidance=True)
@@ -381,7 +383,7 @@ class GapAnalyzerEngine:
         report = self._coverage_note(report, docs)
         if warnings:
             report += "\n\n> " + " ".join(warnings)
-        if warnings and verified_sections:
+        if incomplete and verified_sections:
             # Exclude the last section actually drafted, not an earlier valid one
             # when the interrupted last section has already failed validation.
             drafted = re.findall(r"(?m)^##\s+([1-8])\.", draft)
@@ -393,7 +395,7 @@ class GapAnalyzerEngine:
             "message": "Report ready to display",
             "report": report,
             "sections_completed": list(dict.fromkeys(verified_sections)),
-            "limited": len(verified_sections) < 8 or bool(warnings) or self._limited_coverage(docs),
+            "limited": len(verified_sections) < 8 or incomplete or self._limited_coverage(docs),
         }
 
     @staticmethod
