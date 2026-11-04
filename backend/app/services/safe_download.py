@@ -40,8 +40,6 @@ def download_pdf(url: str, max_bytes: int = 15 * 1024 * 1024) -> bytes:
             http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
         )
         connection = cls(parsed.hostname, port, timeout=min(6, remaining))
-        # Keep the hostname for TLS certificate verification and Host, but pin the socket
-        # to the already-validated address so a second DNS lookup cannot rebind it.
         connection._create_connection = (  # type: ignore[attr-defined]
             lambda *args, _address=address, _port=port, _remaining=remaining, **kwargs: (
                 socket.create_connection((_address, _port), timeout=min(6, _remaining))

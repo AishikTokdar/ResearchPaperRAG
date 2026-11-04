@@ -299,7 +299,6 @@ export function ChatContainer() {
     listChatSessions().then(setSessions);
   }, [chatHistory, fileName, showSessions]);
 
-  // Detect server restart via server_boot_id and reset browser document history
   React.useEffect(() => {
     let isMounted = true;
     api
@@ -320,7 +319,6 @@ export function ChatContainer() {
         }
       })
       .catch(() => {
-        // Backend offline or unreachable
       });
 
     return () => {
@@ -371,7 +369,6 @@ export function ChatContainer() {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* Top Session / Local Index Storage Info Banner */}
       {showBanner && (
         <GlassCard padding="sm" className="border-blue-500/30 bg-blue-500/10 dark:bg-blue-950/20">
           <div className="flex items-start justify-between gap-3 text-xs">
@@ -394,9 +391,7 @@ export function ChatContainer() {
         </GlassCard>
       )}
 
-      {/* Main Grid: Left Control Panel (4 cols) | Right Chat View (8 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Sidebar: PDF Upload & Model Controls */}
         <div className="lg:col-span-4 space-y-4">
           <GlassCard padding="default" className="space-y-4">
             <div className="flex items-center justify-between">
@@ -425,7 +420,6 @@ export function ChatContainer() {
             />
           </GlassCard>
 
-          {/* Knowledge Mode & Execution Controls */}
           <GlassCard padding="default" className="space-y-4">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Pipeline &amp; Brain Settings
@@ -448,7 +442,6 @@ export function ChatContainer() {
                 />
               </div>
 
-              {/* Knowledge Source Mode Toggle */}
               <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
@@ -532,7 +525,6 @@ export function ChatContainer() {
             </div>
           </GlassCard>
 
-          {/* Saved Sessions Drawer Button */}
           {sessions.length > 0 && (
             <GlassCard padding="sm" className="flex items-center justify-between">
               <button
@@ -548,7 +540,6 @@ export function ChatContainer() {
             </GlassCard>
           )}
 
-          {/* Sessions List Dropdown */}
           <AnimatePresence>
             {showSessions && (
               <motion.div
@@ -600,9 +591,7 @@ export function ChatContainer() {
           </AnimatePresence>
         </div>
 
-        {/* Right Panel / Main Chat Stream */}
         <div className="lg:col-span-8 flex flex-col h-[75vh] min-h-[500px] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
-          {/* Chat Top Header Toolbar */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-zinc-500" />
@@ -630,7 +619,6 @@ export function ChatContainer() {
                     Export Chat
                   </Button>
 
-                  {/* Export Dropdown Menu */}
                   {showExportMenu && (
                     <div className="absolute right-0 mt-1 w-44 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg p-1.5 z-50 text-xs space-y-1">
                       <button
@@ -667,7 +655,6 @@ export function ChatContainer() {
             </div>
           </div>
 
-          {/* Messages Stream Container */}
           <div
             ref={messagesScrollRef}
             className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6"
@@ -760,7 +747,6 @@ export function ChatContainer() {
             )}
           </div>
 
-          {/* Bottom Chat Input Form */}
           <div className="p-3 sm:p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50">
             <ChatInput
               onSend={handleSendMessage}
@@ -776,7 +762,6 @@ export function ChatContainer() {
         </div>
       </div>
 
-      {/* Confirmation Dialogs */}
       <ConfirmAlertDialog
         open={clearAllOpen}
         onOpenChange={setClearAllOpen}

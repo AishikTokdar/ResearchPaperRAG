@@ -32,8 +32,6 @@ def extract(path: str, max_pages: int, max_chars: int) -> dict:
 
 if __name__ == "__main__":
     try:
-        # Linux/container deployments get a hard parser address-space and CPU limit.
-        # Windows uses the process timeout plus the host/container memory budget.
         if sys.platform != "win32":
             import resource
 

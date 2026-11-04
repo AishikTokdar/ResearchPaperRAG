@@ -38,7 +38,6 @@ export function resolveApiBaseUrl(): string {
         return trimTrailingSlashes(storedUrl.trim());
       }
     } catch {
-        // Keep the default API URL when browser storage is unavailable.
       }
   }
   const raw = import.meta.env.VITE_API_BASE_URL;
@@ -91,7 +90,6 @@ export function resolveSentryTunnelUrl(apiBaseUrl: string): string {
 export const API_BASE_URL = resolveApiBaseUrl();
 export const SENTRY_TUNNEL_URL = resolveSentryTunnelUrl(API_BASE_URL);
 
-/** Dynamically join API base (absolute URL or path like ``/api``) with an endpoint path */
 export function joinApiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   const currentBase = trimTrailingSlashes(resolveApiBaseUrl());
@@ -100,6 +98,3 @@ export function joinApiUrl(path: string): string {
   }
   return `${currentBase}${p}`;
 }
-
-
-

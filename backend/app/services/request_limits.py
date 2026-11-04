@@ -22,7 +22,6 @@ def _worker_slots() -> BoundedSemaphore:
 
 
 async def run_bounded_worker(function: Callable, *args: Any) -> Any:
-    """Cancellation cannot release a CPU slot while its thread is still running."""
     slots = _worker_slots()
     if not slots.acquire(blocking=False):
         raise HTTPException(429, "Processing workers are busy. Try again shortly.")
@@ -34,7 +33,6 @@ async def run_bounded_worker(function: Callable, *args: Any) -> Any:
             slots.release()
 
     task = asyncio.create_task(asyncio.to_thread(run))
-    # A disconnected caller no longer awaits the task. Consume its eventual exception.
     task.add_done_callback(lambda done: done.exception() if not done.cancelled() else None)
     await asyncio.wait({task})
     return task.result()

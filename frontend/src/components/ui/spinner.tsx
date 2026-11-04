@@ -12,9 +12,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 export interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Spinner size */
   size?: "sm" | "default" | "lg" | "xl";
-  /** Color variant */
   color?: "default" | "white" | "purple" | "blue";
 }
 

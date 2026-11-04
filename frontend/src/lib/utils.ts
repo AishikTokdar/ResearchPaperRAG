@@ -7,18 +7,18 @@ export function cn(...inputs: ClassValue[]): string {
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 Bytes";
-  
+
   const k = 1024;
   const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 export function formatRelativeTime(date: Date): string {
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
   if (diffInSeconds < 60) return "just now";
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minute${Math.floor(diffInSeconds / 60) > 1 ? "s" : ""} ago`;
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hour${Math.floor(diffInSeconds / 3600) > 1 ? "s" : ""} ago`;
@@ -39,13 +39,13 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
   wait: number
 ): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null;
-  
+
   return function executedFunction(...args: Parameters<T>) {
     const later = () => {
       timeout = null;
       func(...args);
     };
-    
+
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(later, wait);
   };

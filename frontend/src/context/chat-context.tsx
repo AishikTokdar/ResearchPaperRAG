@@ -220,10 +220,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
   );
 }
 
-// ============================================================================
-// Hook
-// ============================================================================
-
 export function useChatContext(): ChatContextValue {
   const context = React.useContext(ChatContext);
 

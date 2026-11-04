@@ -12,7 +12,6 @@ import { initSentry } from "@/lib/sentry";
 import App from "./App";
 import "./styles/globals.css";
 
-// Sentry must init before the React tree is created
 initSentry();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

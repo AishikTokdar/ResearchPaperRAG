@@ -49,6 +49,5 @@ class ResearchSessionRegistry:
         self.sessions.move_to_end(session.session_id)
 
     def activate(self, session: ResearchSession) -> None:
-        """Only validated source submissions/searches may evict another session."""
         with self.lock:
             self._remember(session)

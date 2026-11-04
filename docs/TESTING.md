@@ -1,7 +1,5 @@
 # Verification
 
-See the [live API integration check](LIVE_API_CHECK.md) for the local-frontend review against the deployed Hugging Face API, including observed results and deployment settings that still need attention.
-
 ## Backend
 
 Activate Python and install `backend/requirements-dev.txt`. From the repository root:
@@ -20,7 +18,7 @@ Tests cover session isolation/eviction, safe downloads, body/resource limits, CO
 
 `tests/test_report_resilience.py` checks compound citations, equivalent numeric formats, unsupported/uncited passages, retained report sections, valid Markdown tables, hostile exponents, empty section headings, cache eligibility, abstract coverage, provider interruption and preservation of short PDF results. These are deterministic regressions, not a live-provider quality benchmark.
 
-`tests/test_report_presentation.py` checks labeled general guidance for missing/rejected sections, strict-mode isolation, retained valid passages, compact page citations and source lists. Frontend regressions cover proposal-table separators/first rows, export headings, duplicate citations, and guidance paragraphs after lists. No additional generation call is used for report presentation or fallback advice.
+`tests/test_report_presentation.py` checks labeled general guidance for missing/rejected sections, strict-mode isolation, retained valid passages, compact page citations and source lists. Frontend regressions cover proposal-table separators/first rows, export headings, duplicate citations, and guidance paragraphs after lists. Mixed-source/metadata-only regressions ensure missing sections can receive one small model guidance pass without resending document contents, while numeric claims/citations in that guidance are rejected and provider failure preserves the report. Complete reports and interrupted drafts do not trigger that extra pass.
 
 `backend/tests/integration_server.py` is a loopback-only fixture. Never deploy it: it substitutes external generation/download/embedding boundaries and exposes a test PDF route. Other app/parser/FAISS/session/SSE behavior is real.
 
@@ -74,3 +72,11 @@ The browser test covers production URL handling, search, uppercase PDF upload, m
 Run `docker compose --env-file backend/.env config --quiet`, build the images, then `nginx -t` in the frontend container. Test HTTPS and real SSE delivery. Docker startup and Linux memory-limit behavior need Linux/Docker; local Python/TypeScript success does not prove those properties.
 
 CI runs backend checks, frontend checks/build and deterministic browser integration. A separate Docker job verifies builds/configuration. Live provider checks and realistic load/quality benchmarks remain release-environment checks.
+
+## Local verification — 2026-11-04
+
+The local frontend was exercised against the unmocked local backend with real academic search, local MiniLM embeddings, mixed paper/PDF analysis, all eight report sections, cited follow-ups, model selection, clearing and MD/TXT/PDF/clipboard exports. PDF pages were rendered for visual inspection, and layouts were checked at 320, 375, 768 and 1440 pixels. Invalid uploads and independent-session isolation were also checked. Live Gemini failures exercised successful Groq fallback; this does not certify every catalog model or guarantee provider availability.
+
+The Gradio entrypoint was checked separately from the standalone FastAPI entrypoint. Root-route regression coverage ensures a mounted UI receives `/` while standalone API status remains available. Additional regressions cover clearing unsent follow-up drafts, avoiding duplicate guidance labels after rejected report passages, and preventing proposal labels from bypassing strict follow-up citation checks. The deterministic browser suite additionally covers delayed-response races and error recovery.
+
+The author query `Aishik Tokdar` was reproduced in the local browser with the top two results: dynamic spectrum management using Deep Q-Learning, and hybrid CNN-BiLSTM-BiGRU EEG impairment detection. The former had metadata-only coverage; it was previously dropped before generation. The revised live report retained both sources and used a small topic-guidance generation for rejected sections. Markdown downloads were inspected for all eight sections, source links, valid table headers and labeled guidance. Tests also reject fabricated paper-attribution statements and unsupported numeric targets in proposed-project rows. Live output quality remains model-dependent; guidance is not presented as verified paper findings.

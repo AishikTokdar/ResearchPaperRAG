@@ -9,7 +9,6 @@ export function BackendOfflineBanner() {
   const { isProlongedOffline, isChecking, checkNow } = useHealth();
   const [dismissed, setDismissed] = React.useState(false);
 
-  // If backend comes back online, reset dismissed state so it shows if it drops again
   React.useEffect(() => {
     if (!isProlongedOffline) {
       setDismissed(false);

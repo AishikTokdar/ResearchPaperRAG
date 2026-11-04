@@ -13,7 +13,6 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN npm run build
 
-# Stage 2: Serve via Nginx
 FROM nginx:1.30-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf

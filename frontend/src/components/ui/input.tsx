@@ -57,7 +57,6 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       );
     }
 
-    // Simple input without icons
     return (
       <input
         type={type}

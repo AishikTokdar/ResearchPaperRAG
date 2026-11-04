@@ -3,7 +3,6 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
-/** Shared sizing / focus for alert dialog actions */
 export const alertDialogButtonBase =
   "inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-card)] disabled:pointer-events-none disabled:opacity-50";
 

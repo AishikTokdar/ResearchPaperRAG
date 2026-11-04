@@ -1,14 +1,5 @@
 import type { Config } from "tailwindcss";
 
-/**
- * Tailwind CSS Configuration
- * 
- * This config extends the default Tailwind setup with:
- * - Custom max-width (9xl) for wide layouts
- * - Custom animations for scroll reveals and UI effects
- * - Extended color palette for glassmorphism design
- * - Custom font family (Inter)
- */
 const config: Config = {
   darkMode: "class",
   content: [
@@ -17,15 +8,12 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      // Custom max-width for root layout
       maxWidth: {
         "9xl": "1600px",
       },
-      // Custom font family
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
       },
-      // Custom animations for scroll reveal and UI effects
       animation: {
         "fade-in": "fadeIn 0.6s ease-out forwards",
         "fade-in-up": "fadeInUp 0.6s ease-out forwards",
@@ -98,7 +86,6 @@ const config: Config = {
           "50%": { transform: "translateY(-10px)" },
         },
       },
-      // Extended colors for glassmorphism
       colors: {
         indigo: {
           50: '#f0f5f1', 100: '#dfebe2', 200: '#c2d7c8', 300: '#9cbea7',
@@ -111,11 +98,9 @@ const config: Config = {
           dark: "rgba(0, 0, 0, 0.2)",
         },
       },
-      // Backdrop blur values
       backdropBlur: {
         xs: "2px",
       },
-      // Box shadow for glassmorphism
       boxShadow: {
         glass: "0 8px 32px 0 rgba(31, 38, 135, 0.15)",
         "glass-lg": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",

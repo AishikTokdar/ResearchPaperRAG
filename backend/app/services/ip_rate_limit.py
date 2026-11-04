@@ -23,13 +23,11 @@ from fastapi import HTTPException, Request
 from ..config import get_settings
 
 _lock = threading.Lock()
-# key -> deque of monotonic timestamps (last window only)
 _upload_hits: dict[str, deque[float]] = {}
 _ask_hits: dict[str, deque[float]] = {}
 
 
 def client_ip(request: Request) -> str:
-    """Honor X-Real-IP only when the immediate peer is a configured proxy."""
     peer = request.client.host if request.client else "unknown"
     try:
         trusted = any(
@@ -57,7 +55,6 @@ def _prune_and_allow(
     now = time.monotonic()
     cutoff = now - window_seconds
     with _lock:
-        # Bound memory even when many distinct clients hit the service once.
         if len(store) >= 10000:
             for stale_key in [k for k, hits in store.items() if not hits or hits[-1] < cutoff]:
                 del store[stale_key]

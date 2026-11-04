@@ -15,9 +15,9 @@ def _norm_texts(texts: list[str]) -> list[str]:
 
 
 class GroqEmbeddings(Embeddings):
-    """Groq OpenAI /v1/embeddings with explicit JSON input: list[str]."""
-
-    def __init__(self, api_key: str, model: str, base_url: str = "https://api.groq.com/openai/v1") -> None:
+    def __init__(
+        self, api_key: str, model: str, base_url: str = "https://api.groq.com/openai/v1"
+    ) -> None:
         self._key = api_key
         self._model = model
         self._base = base_url.rstrip("/")
@@ -56,8 +56,6 @@ class GroqEmbeddings(Embeddings):
 
 
 class GeminiEmbeddings(Embeddings):
-    """Gemini REST embedContent / batchEmbedContents (not OpenAI-compat)."""
-
     def __init__(self, api_key: str, model: str) -> None:
         self._key = api_key
         self._resource = model if model.startswith("models/") else f"models/{model}"
@@ -67,7 +65,9 @@ class GeminiEmbeddings(Embeddings):
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         normed = _norm_texts(texts)
-        url = f"https://generativelanguage.googleapis.com/v1beta/{self._resource}:batchEmbedContents"
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/{self._resource}:batchEmbedContents"
+        )
         headers = {"x-goog-api-key": self._key, "Content-Type": "application/json"}
         out: list[list[float]] = []
         with httpx.Client(timeout=120.0) as client:

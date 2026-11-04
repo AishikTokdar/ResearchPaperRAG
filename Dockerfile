@@ -9,21 +9,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python requirements
 COPY requirements.txt .
 COPY backend/requirements-api.txt backend/requirements-api.txt
 RUN pip install --no-cache-dir "torch>=2.6,<3" --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
-# Copy project source code
 COPY . .
 
-# Set up writable directories and non-root user
 RUN mkdir -p documents uploads faiss_index faiss_index/sessions .cache/huggingface .cache/transformers \
     && groupadd --system --gid 10001 appgroup \
     && useradd --system --uid 10001 --gid appgroup --home-dir /app --no-create-home appuser \

@@ -12,7 +12,6 @@ from langchain_core.documents import Document
 
 @lru_cache(maxsize=1)
 def _encoding():
-    # A common tokenizer for budgeting, not a claim of exact provider billing.
     return tiktoken.get_encoding("cl100k_base")
 
 
@@ -30,7 +29,6 @@ def terms(text: str) -> set[str]:
 
 
 def rank_evidence(query: str, documents: list[Document]) -> list[Document]:
-    """Fuse dense rank with local lexical rank; never use page position as relevance."""
     query_terms = terms(query)
     lexical = sorted(
         range(len(documents)),
@@ -63,7 +61,7 @@ def fit_evidence(documents: list[Document], budget: int) -> list[Document]:
             continue
         cost = token_count(format_evidence(kept + [doc])[0])
         if cost > budget:
-            continue  # A large passage must not prevent smaller complete passages fitting.
+            continue
         kept.append(doc)
         seen.add(key)
     return kept
@@ -94,9 +92,7 @@ def format_evidence(documents: list[Document]) -> tuple[str, dict[str, str]]:
         source_key = str(meta.get("paper_id") or meta.get("source_file") or title)
         if source_key not in sources:
             sources[source_key] = f"P{len(sources) + 1}"
-            blocks.append(
-                f"Source: {title}; year={meta.get('year', 'unknown')}"
-            )
+            blocks.append(f"Source: {title}; year={meta.get('year', 'unknown')}")
         scope = meta.get("evidence_scope", "full_text")
         location = f"; page={page + 1}" if isinstance(page, int) else ""
         blocks.append(
@@ -113,19 +109,18 @@ def _normalize_citations(answer: str) -> str:
     return re.sub(
         r"\[(E\d+(?:\s*[,;]\s*E\d+)*)\]|\(E(\d+)\)",
         lambda m: " ".join(f"[{ref.upper()}]" for ref in re.findall(r"E\d+", m[0], re.I)),
-        answer, flags=re.I,
+        answer,
+        flags=re.I,
     )
 
 
 def resolve_citations(answer: str, citations: dict[str, str]) -> str:
     answer = _normalize_citations(answer)
-    # Some providers attach an evidence tag directly to the last word. Keep
-    # resolved filenames and source labels readable in follow-ups and exports.
     answer = re.sub(r"(?<=[\w)*`])(?=\[E\d+\])", " ", answer)
-    # Presentation cleanup only; never guess a paper number as a passage ID.
     answer = re.sub(
         r"(?m)^(\s*[-*•]\s*)(?:Source\s+)?P\d+(?:\s*[/,-]\s*(?:P\d+|E\d+))*\s*\(([^)\n]+)\)",
-        lambda m: f"{m[1]}**{m[2].strip().strip('*')}**", answer,
+        lambda m: f"{m[1]}**{m[2].strip().strip('*')}**",
+        answer,
     )
     resolved = re.sub(r"\[(E\d+)\]", lambda m: citations.get(m[1], "[unverified source]"), answer)
     resolved = re.sub(r"(\[[^\]]+\]\([^)]+\))(?:\s+\1)+", r"\1", resolved)
@@ -133,7 +128,6 @@ def resolve_citations(answer: str, citations: dict[str, str]) -> str:
 
 
 def _numbers(text: str) -> set[str]:
-    """Normalize equivalent notation without treating URL digits as measurements."""
     text = re.sub(r"https?://\S+", "", text).replace("−", "-")
     result = set()
     pattern = r"(?<![\w.])([+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)(\s*%|\s+percent\b)?(?!\w|\.\d)"
@@ -141,7 +135,6 @@ def _numbers(text: str) -> set[str]:
         try:
             number = Decimal(match[1].replace(",", ""))
             exponent = number.as_tuple().exponent
-            # Never expand hostile exponents to enormous strings.
             if not isinstance(exponent, int) or abs(exponent) > 308:
                 value = str(number)
             else:
@@ -164,18 +157,17 @@ def ground_answer(
     allow_proposals: bool = False,
     allow_general_guidance: bool = False,
 ) -> str:
-    """Check provenance, not entailment. Reports can retain independently valid blocks."""
     answer = _normalize_citations(answer)
     answer = re.sub(r"\[([^\]]+)\]\(https?://[^)]+\)", r"[\1]", answer)
     answer = re.sub(r"https?://[^\s<>]+", "[unverified URL removed]", answer)
     evidence = {}
     for i, doc in enumerate(documents or [], 1):
         title = doc.metadata.get("paper_title") or doc.metadata.get("source_file") or ""
-        # Only prompt-visible metadata; IDs, hashes and URLs cannot support metrics.
         evidence[f"E{i}"] = f"{doc.page_content} {title} {doc.metadata.get('year', '')}"
     lines = answer.splitlines()
     table_headers = {
-        line.strip() for i, line in enumerate(lines[:-1])
+        line.strip()
+        for i, line in enumerate(lines[:-1])
         if line.strip().startswith("|") and re.fullmatch(r"[\s|:-]+", lines[i + 1])
     }
     blocks = re.split(r"(\n\s*\n|\n(?=\s*(?:#{1,6} |[-*•] |\d+[.)] |\|)))", answer)
@@ -192,8 +184,10 @@ def ground_answer(
             background = name == "background knowledge"
             proposal_section = name == "novel paper suggestions"
         prose = "\n".join(
-            line for line in block.splitlines()
-            if not line.lstrip().startswith("#") and line.strip() not in table_headers
+            line
+            for line in block.splitlines()
+            if not line.lstrip().startswith("#")
+            and line.strip() not in table_headers
             and not re.fullmatch(r"[\s|:-]+", line)
         ).strip()
         if not prose:
@@ -206,21 +200,35 @@ def ground_answer(
         elif not refs:
             abstention = re.fullmatch(
                 r"(?:[-*•]\s*)?(?:Insufficient evidence(?: (?:in|to|for|from|about|on)[^.!?\n]*)?|I cannot find[^.]*|Not (?:provided|available)[^.]*)[.!]?",
-                prose, re.I,
+                prose,
+                re.I,
             )
             proposal = re.match(
-                r"^(?:[-*•]\s*)?(?:Proposed (?:project|research|hypothesis)|Hypothesis|Suggestion)\s*:", prose, re.I,
+                r"^(?:[-*•]\s*)?(?:Proposed (?:project|research|hypothesis)|Hypothesis|Suggestion)\s*:",
+                prose,
+                re.I,
             )
             hypothesis_row = (
-                allow_proposals and proposal_section and prose.startswith("|")
-                and any("hypothesis" in h.casefold() and "proposed" in h.casefold() for h in table_headers)
+                allow_proposals
+                and proposal_section
+                and prose.startswith("|")
+                and any(
+                    "hypothesis" in h.casefold() and "proposed" in h.casefold()
+                    for h in table_headers
+                )
             )
             general_guidance = (
                 allow_general_guidance
                 and re.match(r"^(?:\*\*)?General guidance(?:\*\*)?\s*:", prose, re.I)
                 and not _numbers(prose)
             )
-            if not (abstention or proposal or hypothesis_row or general_guidance or (allow_background and background)):
+            if not (
+                abstention
+                or proposal
+                or hypothesis_row
+                or general_guidance
+                or (allow_background and background)
+            ):
                 reason = "a factual passage did not cite the supplied evidence"
         elif documents is not None:
             claim = re.sub(r"\[E\d+\]", "", prose)
@@ -231,7 +239,11 @@ def ground_answer(
         if not reason:
             kept.append(block)
         elif not preserve_valid_blocks:
-            prefix = "I cannot provide a grounded answer" if "did not cite" in reason else "I cannot verify this response"
+            prefix = (
+                "I cannot provide a grounded answer"
+                if "did not cite" in reason
+                else "I cannot verify this response"
+            )
             return f"{prefix}: {reason}."
         else:
             if heading:
@@ -241,4 +253,8 @@ def ground_answer(
                 columns = len(prose.strip().strip("|").split("|"))
                 notice = "| " + notice + " |" + " — |" * (columns - 1)
             kept.append(notice)
-    return resolve_citations("".join(kept), citations) if answer.strip() else "Insufficient evidence to produce an answer."
+    return (
+        resolve_citations("".join(kept), citations)
+        if answer.strip()
+        else "Insufficient evidence to produce an answer."
+    )

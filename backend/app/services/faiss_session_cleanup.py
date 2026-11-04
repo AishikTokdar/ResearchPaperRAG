@@ -23,10 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 def prune_stale_session_indexes() -> tuple[int, int]:
-    """
-    Returns ``(removed_stale_age, removed_junk_names)``.
-    No-op when ``faiss_session_max_age_days`` is 0.
-    """
     settings = get_settings()
     max_age_days = int(settings.faiss_session_max_age_days)
     if max_age_days <= 0:
@@ -78,10 +74,6 @@ def prune_stale_session_indexes() -> tuple[int, int]:
 
 
 def purge_all_session_indexes() -> int:
-    """
-    Completely removes all FAISS session vector index directories on server startup.
-    Ensures vector indexes and document sessions reset every time the server restarts.
-    """
     root = VectorStoreService.sessions_directory()
     if not os.path.isdir(root):
         return 0
@@ -98,4 +90,3 @@ def purge_all_session_indexes() -> int:
 
     logger.info("FAISS server restart purge: removed %d session directories", count)
     return count
-

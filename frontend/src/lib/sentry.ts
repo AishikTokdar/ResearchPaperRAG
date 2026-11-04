@@ -1,14 +1,12 @@
 import * as Sentry from "@sentry/react";
 
 export function initSentry(): void {
-  // Error reporting is an explicit deployment choice, never a bundled destination.
   const dsn = import.meta.env.VITE_SENTRY_DSN?.trim();
   if (!dsn) return;
 
   Sentry.init({
     dsn,
     sendDefaultPii: false,
-    // Documents, prompts and generated answers must not enter replay or trace payloads.
     integrations: [],
     tracesSampleRate: 0,
     tracePropagationTargets: [],

@@ -87,12 +87,10 @@ export function ApiStatusPage() {
     }
   };
 
-
   return (
     <PageWrapper>
       <SectionWrapper>
         <p className="section-kicker">Service overview</p>
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -170,7 +168,6 @@ export function ApiStatusPage() {
           </GlassCard>
         )}
 
-        {/* Overview Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <GlassCard padding="default">
             <GlassCardContent className="space-y-1">
@@ -223,7 +220,6 @@ export function ApiStatusPage() {
           </GlassCard>
         </div>
 
-        {/* Configured Providers Grid */}
         {data?.providers_detail && data.providers_detail.length > 0 && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">

@@ -60,7 +60,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, newTheme);
     } catch {
-      /* ignore */
     }
     setThemeState(newTheme);
   }, []);

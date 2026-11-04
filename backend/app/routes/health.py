@@ -11,7 +11,7 @@ router = APIRouter(tags=["Health & Operations"])
 async def root():
     return StatusResponse(
         status="running",
-        message="ResearchPaperRAG API is ready. See /docs and /redoc for the full backend reference."
+        message="ResearchPaperRAG API is ready. See /docs and /redoc for the full backend reference.",
     )
 
 
@@ -42,7 +42,7 @@ async def health_head():
 async def list_models():
     settings = get_settings()
     models = LLMService.get_available_models()
-    
+
     model_infos = [
         ModelInfo(
             id=m["id"],
@@ -56,11 +56,8 @@ async def list_models():
         )
         for m in models
     ]
-    
-    return ModelsResponse(
-        models=model_infos,
-        default_model=settings.default_model
-    )
+
+    return ModelsResponse(models=model_infos, default_model=settings.default_model)
 
 
 @router.get("/pipeline-info")

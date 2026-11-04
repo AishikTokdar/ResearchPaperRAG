@@ -15,6 +15,7 @@ import gradio_client.utils as _client_utils
 try:
     import spaces
 except ImportError:
+
     class _SpacesFallback:
         @staticmethod
         def GPU(*args, **kwargs):
@@ -33,7 +34,9 @@ except ImportError:
 def zerogpu_probe() -> None:
     return None
 
+
 _orig_js_to_py = getattr(_client_utils, "_json_schema_to_python_type", None)
+
 
 def _safe_json_schema_to_python_type(schema, defs=None):
     if isinstance(schema, bool):
@@ -42,9 +45,9 @@ def _safe_json_schema_to_python_type(schema, defs=None):
         return _orig_js_to_py(schema, defs)
     return "Any"
 
+
 if _orig_js_to_py:
     _client_utils._json_schema_to_python_type = _safe_json_schema_to_python_type
-
 
 import sys
 import os
@@ -56,7 +59,6 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
-
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -77,7 +79,11 @@ try:
     from app.services.pdf_processor import PDFProcessor
     from app.services.session_vector_registry import SessionVectorRegistry
     from app.services.llm_service import LLMService
-    from app.services.usage_counters import increment_pdf_uploads, increment_chat_completions, read_counters
+    from app.services.usage_counters import (
+        increment_pdf_uploads,
+        increment_chat_completions,
+        read_counters,
+    )
     from app.agents.pipeline import AgentPipeline
     from app.agents.base_agent import AgentResult
 except ModuleNotFoundError:
@@ -92,7 +98,11 @@ except ModuleNotFoundError:
     from backend.app.services.pdf_processor import PDFProcessor
     from backend.app.services.session_vector_registry import SessionVectorRegistry
     from backend.app.services.llm_service import LLMService
-    from backend.app.services.usage_counters import increment_pdf_uploads, increment_chat_completions, read_counters
+    from backend.app.services.usage_counters import (
+        increment_pdf_uploads,
+        increment_chat_completions,
+        read_counters,
+    )
     from backend.app.agents.pipeline import AgentPipeline
     from backend.app.agents.base_agent import AgentResult
 
@@ -105,6 +115,7 @@ pdf_processor = PDFProcessor()
 vector_registry = SessionVectorRegistry(settings.max_vector_sessions)
 llm_service = LLMService()
 
+
 def build_model_choices() -> list[str]:
     choices = [settings.default_model]
     for prov_name in PROVIDER_PRIORITY:
@@ -113,6 +124,7 @@ def build_model_choices() -> list[str]:
             for model_id in provider.models:
                 choices.append(model_id)
     return list(dict.fromkeys(choices))
+
 
 ALL_MODEL_CHOICES = build_model_choices()
 
@@ -141,7 +153,9 @@ def upload_pdf_files(
     total_bytes = 0
 
     for file_item in files:
-        file_path = file_item if isinstance(file_item, str) else getattr(file_item, "name", str(file_item))
+        file_path = (
+            file_item if isinstance(file_item, str) else getattr(file_item, "name", str(file_item))
+        )
         fname = os.path.basename(file_path)
 
         if not fname.lower().endswith(".pdf"):
@@ -174,11 +188,13 @@ def upload_pdf_files(
         try:
             res = pdf_processor.process_uploaded_file(data, fname)
             all_chunks.extend(res.chunks)
-            file_metas.append({
-                "file_name": fname,
-                "page_count": res.total_pages,
-                "chunks_created": res.total_chunks,
-            })
+            file_metas.append(
+                {
+                    "file_name": fname,
+                    "page_count": res.total_pages,
+                    "chunks_created": res.total_chunks,
+                }
+            )
         except Exception as e:
             err_msg = f"Error processing '{fname}': {str(e)}"
             return err_msg, session_id, {"status": "error", "message": err_msg}
@@ -211,7 +227,6 @@ def upload_pdf_files(
 
 
 def _history_pairs(history: list | None) -> list[tuple[str, str]]:
-    """Accept legacy tuple clients and the current Gradio message format."""
     pairs: list[tuple[str, str]] = []
     for item in history or []:
         if isinstance(item, (tuple, list)) and len(item) == 2:
@@ -219,7 +234,9 @@ def _history_pairs(history: list | None) -> list[tuple[str, str]]:
         elif isinstance(item, dict):
             content = item.get("content", "")
             if isinstance(content, list):
-                content = "\n".join(block.get("text", "") for block in content if isinstance(block, dict))
+                content = "\n".join(
+                    block.get("text", "") for block in content if isinstance(block, dict)
+                )
             if item.get("role") == "user":
                 pairs.append((str(content), ""))
             elif item.get("role") == "assistant" and pairs:
@@ -228,16 +245,24 @@ def _history_pairs(history: list | None) -> list[tuple[str, str]]:
 
 
 async def stream_chat_response(
-    question: str, model: str, knowledge_mode: str, include_sources: bool,
-    history: list, session_id: str | None = None,
+    question: str,
+    model: str,
+    knowledge_mode: str,
+    include_sources: bool,
+    history: list,
+    session_id: str | None = None,
 ) -> AsyncGenerator[tuple[list, str, str], None]:
     async for pairs, status, active_session in _stream_chat_response_pairs(
         question, model, knowledge_mode, include_sources, _history_pairs(history), session_id
     ):
-        messages = [message for question_text, answer_text in pairs for message in (
-            {"role": "user", "content": question_text},
-            {"role": "assistant", "content": answer_text},
-        )]
+        messages = [
+            message
+            for question_text, answer_text in pairs
+            for message in (
+                {"role": "user", "content": question_text},
+                {"role": "assistant", "content": answer_text},
+            )
+        ]
         yield messages, status, active_session
 
 
@@ -267,10 +292,10 @@ async def _stream_chat_response_pairs(
 
     if history is None:
         history = []
-    
+
     current_history = list(history)
     current_history.append((q, ""))
-    
+
     start_time = time.time()
     yield current_history, "Initializing 7-Stage Agent Pipeline...", session_id
 
@@ -295,7 +320,11 @@ async def _stream_chat_response_pairs(
             yield current_history, err_text, session_id
             return
 
-        yield current_history, "[Stage 2/7 Analyzer] Filtering duplicate and noisy chunks...", session_id
+        yield (
+            current_history,
+            "[Stage 2/7 Analyzer] Filtering duplicate and noisy chunks...",
+            session_id,
+        )
         ok, filtered, ms, err = pipeline._step(pipeline.analyzer, chunks, context, results)
         total_ms += ms
         if not ok:
@@ -313,8 +342,14 @@ async def _stream_chat_response_pairs(
             yield current_history, err_text, session_id
             return
 
-        yield current_history, "[Stage 4/7 Optimizer] Trimming to optimal token budget...", session_id
-        ok, (stream_q, opt_chunks), ms, err = pipeline._step(pipeline.optimizer, (q, cleaned), context, results)
+        yield (
+            current_history,
+            "[Stage 4/7 Optimizer] Trimming to optimal token budget...",
+            session_id,
+        )
+        ok, (stream_q, opt_chunks), ms, err = pipeline._step(
+            pipeline.optimizer, (q, cleaned), context, results
+        )
         total_ms += ms
         if not ok:
             err_text = f"Optimizer Agent error: {err}"
@@ -322,7 +357,11 @@ async def _stream_chat_response_pairs(
             yield current_history, err_text, session_id
             return
 
-        yield current_history, "[Stage 5/7 Synthesizer] Generating AI answer via streaming LLM...", session_id
+        yield (
+            current_history,
+            "[Stage 5/7 Synthesizer] Generating AI answer via streaming LLM...",
+            session_id,
+        )
         accumulated_answer = ""
         model_used = None
 
@@ -343,10 +382,16 @@ async def _stream_chat_response_pairs(
         context["answer_length"] = len(accumulated_answer)
 
         yield current_history, "[Stage 6/7 Validator] Verification and quality check...", session_id
-        ok, validated, ms, err = pipeline._step(pipeline.validator, accumulated_answer, context, results)
+        ok, validated, ms, err = pipeline._step(
+            pipeline.validator, accumulated_answer, context, results
+        )
         total_ms += ms
 
-        yield current_history, "[Stage 7/7 Assembler] Formatting final citations and response...", session_id
+        yield (
+            current_history,
+            "[Stage 7/7 Assembler] Formatting final citations and response...",
+            session_id,
+        )
         ok, assembled, ms, err = pipeline._step(pipeline.assembler, validated, context, results)
         total_ms += ms
 
@@ -360,7 +405,9 @@ async def _stream_chat_response_pairs(
             for i, src in enumerate(sources, 1):
                 final_answer += f"{i}. {src}\n"
 
-        elapsed_sec = round(total_ms / 1000.0, 2) if total_ms > 0 else round(time.time() - start_time, 2)
+        elapsed_sec = (
+            round(total_ms / 1000.0, 2) if total_ms > 0 else round(time.time() - start_time, 2)
+        )
         model_name = assembled.get("model_used") or model_used or model
         final_status = f"Answer generated in {elapsed_sec}s using `{model_name}`"
 
@@ -381,7 +428,9 @@ def get_system_status(session_id: str | None = None) -> dict:
 
     return {
         "status": "ready" if is_ready else "waiting",
-        "message": "PDF loaded and ready for questions" if is_ready else "No PDF loaded. Please upload a PDF first.",
+        "message": "PDF loaded and ready for questions"
+        if is_ready
+        else "No PDF loaded. Please upload a PDF first.",
         "pdf_loaded": is_ready,
         "model": settings.default_model,
         "documents_loaded": 1 if is_ready else 0,
@@ -395,13 +444,15 @@ def get_available_models_info() -> dict:
     for prov_name, prov in AI_PROVIDERS.items():
         enabled = provider_has_credentials(prov)
         for m in prov.models:
-            models_list.append({
-                "id": m,
-                "name": m,
-                "provider": prov_name,
-                "is_default": m == settings.default_model,
-                "is_available": enabled,
-            })
+            models_list.append(
+                {
+                    "id": m,
+                    "name": m,
+                    "provider": prov_name,
+                    "is_default": m == settings.default_model,
+                    "is_available": enabled,
+                }
+            )
     return {
         "models": models_list,
         "default_model": settings.default_model,
@@ -422,13 +473,15 @@ def get_metrics_summary() -> dict:
             st = "partial"
         else:
             st = "unavailable"
-        provider_rows.append({
-            "id": name,
-            "display_name": name.replace("_", " ").title(),
-            "llm_ready": llm_ok,
-            "embedding_ready": emb_ok,
-            "status": st,
-        })
+        provider_rows.append(
+            {
+                "id": name,
+                "display_name": name.replace("_", " ").title(),
+                "llm_ready": llm_ok,
+                "embedding_ready": emb_ok,
+                "status": st,
+            }
+        )
 
     total_pdf, total_chats = read_counters()
     usable = sum(1 for r in provider_rows if r["status"] in ("working", "partial"))
@@ -449,13 +502,8 @@ def get_metrics_summary() -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Gradio UI Layout Construction
-# ---------------------------------------------------------------------------
-
 def create_gradio_app() -> gr.Blocks:
     with gr.Blocks(title="ResearchPaperRAG Backend Engine") as demo:
-
         session_state = gr.State(ensure_session_id(None))
 
         with gr.Column(elem_classes=["main-header"]):
@@ -478,8 +526,6 @@ def create_gradio_app() -> gr.Blocks:
             )
 
         with gr.Tabs() as tabs:
-
-            # TAB 1: Document Upload & Vector Indexing
             with gr.Tab("PDF Document Upload", id="tab_upload"):
                 gr.Markdown(
                     """
@@ -494,8 +540,10 @@ def create_gradio_app() -> gr.Blocks:
                             file_types=[".pdf"],
                             label="Select PDF Files (Max 3 files, combined <= 50MB)",
                         )
-                        upload_button = gr.Button("Upload & Build Vector Index", variant="primary", size="lg")
-                    
+                        upload_button = gr.Button(
+                            "Upload & Build Vector Index", variant="primary", size="lg"
+                        )
+
                     with gr.Column(scale=3):
                         upload_output_md = gr.Markdown("*Upload document files to get started...*")
                         upload_meta_json = gr.JSON(label="Processing & Document Metadata", value={})
@@ -507,7 +555,6 @@ def create_gradio_app() -> gr.Blocks:
                     api_name="upload",
                 )
 
-            # TAB 2: RAG Chat & Agent Reasoning
             with gr.Tab("RAG Chat & Pipeline", id="tab_chat"):
                 with gr.Row():
                     with gr.Column(scale=3):
@@ -530,7 +577,9 @@ def create_gradio_app() -> gr.Blocks:
                             submit_button = gr.Button("Submit", variant="primary", scale=1)
 
                         with gr.Row():
-                            clear_button = gr.Button("Clear Chat History", variant="secondary", size="sm")
+                            clear_button = gr.Button(
+                                "Clear Chat History", variant="secondary", size="sm"
+                            )
 
                     with gr.Column(scale=1):
                         gr.Markdown("### Generation Settings")
@@ -555,7 +604,7 @@ def create_gradio_app() -> gr.Blocks:
                             label="Include Source Citations",
                             info="Show exact PDF source passages used for the answer.",
                         )
-                        
+
                         session_display = gr.Textbox(
                             label="Active Session ID",
                             interactive=False,
@@ -575,7 +624,7 @@ def create_gradio_app() -> gr.Blocks:
                     outputs=[chatbot, status_text, session_state],
                     api_name="ask",
                 )
-                
+
                 submit_event.then(lambda: "", outputs=[question_input])
 
                 question_input.submit(
@@ -593,7 +642,6 @@ def create_gradio_app() -> gr.Blocks:
 
                 clear_button.click(lambda: ([], "*Chat cleared.*"), outputs=[chatbot, status_text])
 
-            # TAB 3: Metrics & System Status
             with gr.Tab("System Status & Metrics", id="tab_metrics"):
                 gr.Markdown("### System Operational Diagnostics & Provider Health")
                 refresh_metrics_btn = gr.Button("Refresh System Metrics", variant="secondary")
@@ -643,7 +691,6 @@ def create_gradio_app() -> gr.Blocks:
 
 
 demo = create_gradio_app()
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", os.environ.get("SERVER_PORT", 7860)))

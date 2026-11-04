@@ -41,8 +41,6 @@ _cooldowns: dict[str, float] = {}
 
 
 class UsageLogger(BaseCallbackHandler):
-    """Log usage without prompts, document text, session IDs, or credentials."""
-
     def __init__(self, feature: str, provider: str, model: str, attempt: int):
         self.fields = {"feature": feature, "provider": provider, "model": model, "attempt": attempt}
         self.started = time.monotonic()
@@ -102,7 +100,11 @@ knowledge to a paper or attach evidence citations to unsupported background clai
 
     @staticmethod
     def _resolve_llm_api_keys(provider: AIProvider) -> list[str]:
-        return get_all_provider_api_keys(provider.name, provider.api_key) if provider_is_allowed(provider) else []
+        return (
+            get_all_provider_api_keys(provider.name, provider.api_key)
+            if provider_is_allowed(provider)
+            else []
+        )
 
     def _build_llm_with_key(
         self,
@@ -118,11 +120,15 @@ knowledge to a paper or attach evidence citations to unsupported background clai
             else provider.base_url,
             api_key=SecretStr(api_key),
             model=model_id,
-            temperature=None if provider.name == "gemini" and model_id.startswith("gemini-3") else self.settings.temperature,
-            reasoning_effort="low" if (
+            temperature=None
+            if provider.name == "gemini" and model_id.startswith("gemini-3")
+            else self.settings.temperature,
+            reasoning_effort="low"
+            if (
                 (provider.name == "gemini" and model_id.startswith("gemini-3"))
                 or (provider.name == "groq" and model_id.startswith("openai/gpt-oss-"))
-            ) else None,
+            )
+            else None,
             **{"max_tokens": max_tokens or self.settings.max_tokens},
             timeout=timeout or self.settings.llm_timeout_seconds,
             max_retries=0,
@@ -289,7 +295,9 @@ knowledge to a paper or attach evidence citations to unsupported background clai
             messages, model, "pdf_chat_stream", self.settings.followup_max_tokens
         ):
             if event.get("type") == "complete":
-                event["answer"] = ground_answer(event["answer"], citations, docs, allow_background=hybrid_mode)
+                event["answer"] = ground_answer(
+                    event["answer"], citations, docs, allow_background=hybrid_mode
+                )
                 if event.get("warnings"):
                     event["answer"] += "\n\n> " + " ".join(event["warnings"])
             yield event
@@ -342,12 +350,13 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                 self._failure(provider, model_id, signature, exc)
                 if answer.strip():
                     if feature == "gap_report_stream":
-                        # Retain the report draft for local passage validation.
-                        # Never append another provider's answer to this draft.
                         yield {
-                            "type": "complete", "model_used": model_id,
+                            "type": "complete",
+                            "model_used": model_id,
                             "answer": answer,
-                            "warnings": ["Generation was interrupted; this report is incomplete. Retry to generate the remaining sections."],
+                            "warnings": [
+                                "Generation was interrupted; this report is incomplete. Retry to generate the remaining sections."
+                            ],
                         }
                         return
                     raise RuntimeError("The response was interrupted. Please retry.") from None
@@ -363,8 +372,10 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                 "access_tier": p.access_tier,
                 "is_preview": model in p.preview_models,
                 "provider": p.name,
-                "is_default": model == settings.default_model and p.name == settings.default_provider,
-                "is_available": provider_is_allowed(p) and bool(get_all_provider_api_keys(p.name, p.api_key)),
+                "is_default": model == settings.default_model
+                and p.name == settings.default_provider,
+                "is_available": provider_is_allowed(p)
+                and bool(get_all_provider_api_keys(p.name, p.api_key)),
                 "api_key_env": p.api_key_env,
             }
             for p in AI_PROVIDERS.values()

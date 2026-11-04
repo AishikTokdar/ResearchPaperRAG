@@ -59,9 +59,7 @@ def runtime_summary() -> RuntimeSummaryResponse:
 
     working_n = sum(1 for r in rows if r.status == "working")
     partial_n = sum(1 for r in rows if r.status == "partial")
-    unavail_n = sum(
-        1 for r in rows if r.status in ("unavailable", "invalid_api_key")
-    )
+    unavail_n = sum(1 for r in rows if r.status in ("unavailable", "invalid_api_key"))
     llm_ready_n = sum(1 for r in rows if r.llm_ready)
 
     if llm_ready_n == 0:

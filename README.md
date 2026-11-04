@@ -251,7 +251,6 @@ npm --prefix frontend run build
 - [API Specification & Examples](docs/API.md) — Complete endpoint reference, payload structures, and SSE schemas.
 - [Production Deployment Guide](docs/DEPLOYMENT.md) — Single-worker sizing, reverse proxy settings, and operational limits.
 - [Hosted Deployment Guide](docs/HOSTED_DEPLOYMENT.md) — Step-by-step Hugging Face + Cloudflare Pages walk-through.
-- [Feature Architecture Map](docs/FEATURES.md) — Component breakdown and pipeline implementation details.
 - [Testing & Quality Assurance](docs/TESTING.md) — Test suites, security assertions, and browser integration.
 - [Backend Gradio & Spaces Reference](backend/README.md) — Optional legacy PDF chat and Spaces configuration.
 

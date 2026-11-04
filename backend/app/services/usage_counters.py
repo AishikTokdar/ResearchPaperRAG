@@ -61,7 +61,6 @@ def _increment(upload: bool) -> None:
             pdf, chats = _read_pair(path)
             _write_pair(path, pdf + int(upload), chats + int(not upload))
     except OSError:
-        # Aggregate telemetry failure must never discard an already-paid AI answer.
         logger.warning("Usage counter persistence is unavailable")
 
 

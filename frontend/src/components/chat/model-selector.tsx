@@ -74,7 +74,6 @@ export function ModelSelector({
           }
         }
       } catch {
-        // Retain the configured model list when discovery fails.
       }
     })();
     return () => {

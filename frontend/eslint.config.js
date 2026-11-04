@@ -5,13 +5,6 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 
-/**
- * ESLint Configuration (flat config for ESLint 9+)
- *
- * - TypeScript strict mode via typescript-eslint
- * - React hooks best practices via eslint-plugin-react-hooks v5
- * - React Fast Refresh compatibility
- */
 export default [
   { ignores: ["dist", "node_modules"] },
   {
@@ -30,6 +23,7 @@ export default [
       ...js.configs.recommended.rules,
       ...tsPlugin.configs["eslint-recommended"].overrides[0].rules,
       ...tsPlugin.configs.recommended.rules,
+      "no-empty": ["error", { "allowEmptyCatch": true }],
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       "react-refresh/only-export-components": [

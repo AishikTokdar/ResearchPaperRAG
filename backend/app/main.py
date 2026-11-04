@@ -60,7 +60,6 @@ except (ImportError, ValueError):
     from app.services.pdf_processor import PDFProcessor
     from app.services.session_vector_registry import SessionVectorRegistry
 
-
 SERVER_BOOT_ID = str(uuid.uuid4())
 
 
@@ -192,7 +191,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if allow_all else cors_origins,
-        allow_origin_regex=None if allow_all else r"^https://([a-zA-Z0-9_-]+\.)*(pages\.dev|vercel\.app)$",
+        allow_origin_regex=None
+        if allow_all
+        else r"^https://([a-zA-Z0-9_-]+\.)*(pages\.dev|vercel\.app)$",
         allow_credentials=not allow_all,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -210,7 +211,6 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
 
 if __name__ == "__main__":
     import os

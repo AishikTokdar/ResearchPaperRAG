@@ -27,8 +27,6 @@ export function getChatApiSessionId(): string {
     if (!volatileSessionId) volatileSessionId = newSessionUuid();
     if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, volatileSessionId);
   } catch {
-    // A stable in-memory capability keeps search, ingestion and follow-up connected
-    // when private browsing or a storage policy blocks localStorage.
     if (!volatileSessionId) {
       try { volatileSessionId = newSessionUuid(); } catch { return ""; }
     }

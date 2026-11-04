@@ -153,7 +153,6 @@ export function useChat(): UseChatReturn {
   );
 
   const cancelStream = React.useCallback(() => {
-    // Abort fetch reader first, then normalize UI state.
     abortRef.current?.abort();
     streamGenerationRef.current += 1;
     setState((prev) => ({

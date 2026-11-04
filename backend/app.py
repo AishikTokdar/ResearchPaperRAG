@@ -14,14 +14,18 @@ os.environ["GRADIO_SSR_MODE"] = "False"
 try:
     import spaces
 except ImportError:
+
     class _SpacesFallback:
         @staticmethod
         def GPU(*args, **kwargs):
             if args and callable(args[0]) and len(args) == 1 and not kwargs:
                 return args[0]
+
             def decorator(func):
                 return func
+
             return decorator
+
     spaces = _SpacesFallback()
 
 import gradio as gr
@@ -30,6 +34,7 @@ try:
     from app.main import app as fastapi_app
 except (ImportError, ModuleNotFoundError):
     from backend.app.main import app as fastapi_app
+
 
 @spaces.GPU
 def zerogpu_probe(value: str = "") -> str:
@@ -51,6 +56,7 @@ if __name__ == "__main__":
 
     try:
         import spaces.zero as _spaces_zero
+
         _zero_startup = getattr(_spaces_zero, "startup", None)
         if callable(_zero_startup):
             _zero_startup()

@@ -5,7 +5,6 @@ interface SpotlightCardProps extends HTMLAttributes<HTMLDivElement> {
   spotlightColor?: string;
 }
 
-// Preserve the component API with a quiet, static surface.
 export function SpotlightCard({ children, className, spotlightColor: _spotlightColor, ...props }: SpotlightCardProps) {
   return <div className={cn("surface-card p-5 sm:p-6", className)} {...props}>{children}</div>;
 }

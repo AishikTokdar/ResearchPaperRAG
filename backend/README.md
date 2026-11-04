@@ -47,4 +47,4 @@ The default `requirements.txt` includes Gradio/Spaces; `requirements-gradio.txt`
 
 Neither replaces the React research workspace. `spaces` is optional for CPU use; the compatibility adapter handles Gradio 6 messages. The optional dependency profile has the Gradio/Pillow security constraint recorded in [the project README](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/README.md). Keep it out of the primary API deployment unless separately assessed.
 
-See [deployment](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/docs/DEPLOYMENT.md), [verification](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/docs/TESTING.md), and the [feature map](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/docs/FEATURES.md) for runtime limits and tested scope.
+See [deployment](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/docs/DEPLOYMENT.md), [verification](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/docs/TESTING.md) for runtime limits and tested scope.

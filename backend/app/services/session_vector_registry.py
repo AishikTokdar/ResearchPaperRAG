@@ -21,7 +21,6 @@ from .vector_store import VectorStoreService
 
 logger = logging.getLogger(__name__)
 
-# UUID v4 (case-insensitive)
 _SESSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
@@ -33,14 +32,6 @@ def is_valid_session_id(session_id: str) -> bool:
 
 
 class SessionVectorRegistry:
-    """
-    In-process registry: maps browser ``session_id`` -> ``VectorStoreService``.
-
-    ``OrderedDict`` + ``move_to_end`` implements LRU: when at capacity, the
-    least-recently-used session is dropped from the registry and idle disk state is removed.
-    In-flight readers retain their immutable index reference.
-    """
-
     def __init__(self, max_sessions: int) -> None:
         self._max = max(4, min(int(max_sessions), 10_000))
         self._stores: OrderedDict[str, VectorStoreService] = OrderedDict()
@@ -57,7 +48,6 @@ class SessionVectorRegistry:
                 return self._stores[sid]
 
             svc = VectorStoreService(session_id=sid)
-            # Read-only probes and rejected questions must not evict real documents.
             if svc.is_ready:
                 self._remember(svc)
             return svc
@@ -70,7 +60,6 @@ class SessionVectorRegistry:
         self._stores[service.session_id] = service
 
     def activate(self, service: VectorStoreService) -> VectorStoreService:
-        """Register only a validated upload, and serialize same-session index writes."""
         with self._lock:
             existing = self._stores.get(service.session_id)
             if existing is not None:

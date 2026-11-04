@@ -11,7 +11,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
-
 _DEFAULT_CORS_ORIGINS: list[str] = [
     "http://localhost:5173",
     "http://localhost:3000",
@@ -20,17 +19,6 @@ _DEFAULT_CORS_ORIGINS: list[str] = [
 
 
 class AIProvider:
-    """
-    Configuration for an AI provider.
-
-    Attributes:
-        name: Provider identifier
-        base_url: API endpoint URL
-        api_key_env: Environment variable name for API key
-        models: List of supported model identifiers
-        is_enabled: Whether this provider has a valid key
-    """
-
     def __init__(
         self,
         name: str,
@@ -56,7 +44,6 @@ class AIProvider:
 
     @property
     def api_key(self) -> str | None:
-        """Get API key from environment."""
         if self._api_key is None:
             self._api_key = os.getenv(self.api_key_env)
             if not self._api_key and self.name == "openrouter":
@@ -65,20 +52,26 @@ class AIProvider:
 
     @property
     def is_enabled(self) -> bool:
-        """Check if provider has valid API key."""
         return bool(self.api_key)
 
 
-MODEL_CATALOG = json.loads(Path(__file__).with_name("model_catalog.json").read_text(encoding="utf-8"))
+MODEL_CATALOG = json.loads(
+    Path(__file__).with_name("model_catalog.json").read_text(encoding="utf-8")
+)
 DEFAULT_MODEL: str = MODEL_CATALOG["default_model"]
 DEFAULT_PROVIDER: str = MODEL_CATALOG["default_provider"]
 AI_PROVIDERS: dict[str, AIProvider] = {
     item["name"]: AIProvider(
-        name=item["name"], base_url=item["base_url"], api_key_env=item["api_key_env"],
-        models=[m["id"] for m in item["models"]], embedding_model=item["embedding_model"],
-        access_tier=item["access_tier"], model_names={m["id"]: m["name"] for m in item["models"]},
+        name=item["name"],
+        base_url=item["base_url"],
+        api_key_env=item["api_key_env"],
+        models=[m["id"] for m in item["models"]],
+        embedding_model=item["embedding_model"],
+        access_tier=item["access_tier"],
+        model_names={m["id"]: m["name"] for m in item["models"]},
         preview_models={m["id"] for m in item["models"] if m["preview"]},
-    ) for item in MODEL_CATALOG["providers"]
+    )
+    for item in MODEL_CATALOG["providers"]
 }
 PROVIDER_PRIORITY: list[str] = [item["name"] for item in MODEL_CATALOG["providers"]]
 
@@ -132,7 +125,6 @@ class Settings(BaseSettings):
     pdf_memory_limit_mb: int = Field(default=512, ge=128, le=4096)
     max_extracted_chars: int = Field(default=500000, ge=1000, le=2000000)
     max_document_chunks: int = Field(default=1000, ge=10, le=5000)
-    # Comma-separated IPs/CIDRs of reverse proxies allowed to supply X-Real-IP.
     trusted_proxy_ips: str = ""
     allowed_hosts: str = "localhost,127.0.0.1,[::1],testserver"
     telemetry_tunnel_dsn: str | None = None
@@ -159,8 +151,7 @@ class Settings(BaseSettings):
             return ["*"]
         return parts if parts else list(_DEFAULT_CORS_ORIGINS)
 
-    # File upload settings
-    max_file_size: int = 50 * 1024 * 1024  # 50MB
+    max_file_size: int = 50 * 1024 * 1024
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -172,30 +163,12 @@ class Settings(BaseSettings):
         return self
 
 
-
 @lru_cache
 def get_settings() -> Settings:
-    """Get cached application settings."""
     return Settings()
 
 
 def get_all_provider_api_keys(provider_name: str, custom_key: str | None = None) -> list[str]:
-    """
-    Extract all API keys for any given provider from:
-    1. Custom passed API key (single string or comma/semicolon/space-separated list)
-    2. Settings & Environment variables for that provider (single or comma-separated)
-
-    Supports env variables:
-    - gemini: GOOGLE_API_KEY, GOOGLE_API_KEYS, GEMINI_API_KEY, GEMINI_API_KEYS
-    - groq: GROQ_API_KEY, GROQ_API_KEYS
-    - cerebras: CEREBRAS_API_KEY, CEREBRAS_API_KEYS
-    - sambanova: SAMBANOVA_API_KEY, SAMBANOVA_API_KEYS
-    - huggingface: HF_API_KEY, HF_API_KEYS, HUGGINGFACE_API_KEY
-    - openrouter: OPENROUTER_API_KEY, OPENROUTER_API_KEYS, OPENAI_API_KEY
-    - openai: OPENAI_DIRECT_API_KEY, OPENAI_API_KEY
-
-    Returns a list of unique non-empty key strings.
-    """
     settings = get_settings()
     keys: list[str] = []
     seen: set[str] = set()
@@ -248,32 +221,28 @@ def get_all_provider_api_keys(provider_name: str, custom_key: str | None = None)
 
 
 def get_all_groq_api_keys(custom_key: str | None = None) -> list[str]:
-    """Backward-compatible helper for Groq API keys."""
     return get_all_provider_api_keys("groq", custom_key)
 
 
 def provider_is_allowed(provider: AIProvider) -> bool:
-    """Credit/trial providers require an explicit server-side opt-in."""
     return provider.access_tier == "free" or get_settings().allow_credit_providers
 
 
 def provider_has_credentials(provider: AIProvider) -> bool:
-    """True if LLM calls can authenticate (env + pydantic Settings + multi-keys)."""
-    return provider_is_allowed(provider) and bool(get_all_provider_api_keys(provider.name, provider.api_key))
+    return provider_is_allowed(provider) and bool(
+        get_all_provider_api_keys(provider.name, provider.api_key)
+    )
 
 
 def get_available_providers() -> list[str]:
-    """Get list of providers with valid API keys."""
     return [name for name, provider in AI_PROVIDERS.items() if provider_has_credentials(provider)]
 
 
 def get_provider(name: str) -> AIProvider | None:
-    """Get provider configuration by name."""
     return AI_PROVIDERS.get(name)
 
 
 def get_default_provider() -> AIProvider:
-    """Get the default or first available provider."""
     settings = get_settings()
 
     default = AI_PROVIDERS.get(settings.default_provider)
@@ -289,7 +258,6 @@ def get_default_provider() -> AIProvider:
 
 
 def get_fallback_chain() -> list[AIProvider]:
-    """Return an ordered list of providers that have credentials for LLM calls."""
     return [
         AI_PROVIDERS[name]
         for name in PROVIDER_PRIORITY
@@ -298,13 +266,6 @@ def get_fallback_chain() -> list[AIProvider]:
 
 
 def get_embedding_fallback_chain() -> list[tuple[AIProvider, str]]:
-    """
-    Ordered embedding backends to try (upload / index build).
-
-    Puts the configured default provider first when it defines an embedding model,
-    then walks PROVIDER_PRIORITY (Groq is skipped because it has no embedding model; Gemini and Hugging Face are used when configured).
-    Direct OpenAI embeddings run only if embedding_openai_direct is true.
-    """
     chain: list[tuple[AIProvider, str]] = []
     seen: set[tuple[str, str]] = set()
     settings = get_settings()

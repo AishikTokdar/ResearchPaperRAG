@@ -166,7 +166,6 @@ export function Header() {
         </nav>
       </div>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div
