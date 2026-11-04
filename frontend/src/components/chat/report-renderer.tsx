@@ -4,7 +4,6 @@ import { Download, FileText, FileCode, Printer, ExternalLink, Copy, Check, Alert
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-
 interface ReportRendererProps {
   report: string;
   topic: string;
@@ -131,8 +130,6 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
 
     document.body.appendChild(container);
 
-    // html2pdf supports break-inside, but not break-after: avoid. Keep a
-    // heading and its introductory paragraph together instead of orphaning it.
     for (const heading of container.querySelectorAll("h2, h3")) {
       const first = heading.nextElementSibling;
       if (!first?.matches("p")) continue;
@@ -154,7 +151,6 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
       html2canvas: { scale: 2, useCORS: true, logging: false },
       jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
     };
-
 
     try {
       const { default: html2pdf } = await import("html2pdf.js");
@@ -246,10 +242,8 @@ export function sanitizeReportMarkdown(raw: string): string {
 
   let cleaned = stripProcessingNotices(raw);
 
-  // 1. Normalize fullwidth/Chinese brackets 【E1】 -> [E1]
   cleaned = cleaned.replace(/【/g, "[").replace(/】/g, "]");
 
-  // 2. Clean prompt artifact shorthand from bullet headers, e.g. "• P1 / P4 (Title) –" -> "• **Title** –"
   cleaned = cleaned.replace(
     /(^|\n)(\s*[-*•]\s*)(?:(?:Source\s+)?P\d+(?:\s*[/,-]\s*(?:P\d+|E\d+))*\s*[:\-–—]?\s*)(?:\(([^)\n]+)\)|([^\n–—:-]+[:\-–—]))/gi,
     (_m, p1, p2, p3, p4) => {
@@ -263,38 +257,29 @@ export function sanitizeReportMarkdown(raw: string): string {
   cleaned = cleaned.replace(/\bP\d+\s*[/,-]\s*(?:P\d+|E\d+)\b/gi, "");
   cleaned = cleaned.replace(/(^|\n)(\s*[-*•]\s*)(?:Source\s+)?P\d+\s*[:\-–—]\s*/gi, "$1$2");
 
-  // 3. Fix spaces before sentence punctuation after citation: [Citation](url) . -> [Citation](url).
   cleaned = cleaned.replace(/(\[[^\]]+\](?:\([^)]+\))?)\s+([.,;:!?])/g, "$1$2");
 
-  // 4. Deduplicate consecutive identical links
   cleaned = cleaned.replace(/(\[[^\]]+\]\([^)]+\))(?:\s*\1)+/g, "$1");
   cleaned = cleaned.replace(/(\]\([^)]+\))(?=\[)/g, "$1 ");
 
-  // 5. Separate subheaders directly attached to code fences like ``` ### Header
   cleaned = cleaned.replace(/```+\s*(###?\s+[^\n]+)/g, "\n\n$1");
 
-  // 6. Strip ASCII box drawing borders like +-----------------+-----------------+ or • +-------+
   const preserveTableSeparator = (line: string) => /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/.test(line) ? line : "";
   cleaned = cleaned.replace(/^\s*(?:```\s*)?[+•|]?\s*[-+=]{3,}.*$/gm, preserveTableSeparator);
   cleaned = cleaned.replace(/^\s*[+•|]\s*[-+=]{3,}.*$/gm, preserveTableSeparator);
 
-  // 7. Remove orphaned backtick lines
   cleaned = cleaned.replace(/^\s*```[a-zA-Z]*\s*$/gm, "");
 
-  // 8. Normalize section headers to standard "## N. Section Title"
   cleaned = cleaned.replace(/^###?\s*(\d+\.\s+[^\n]+?):?\s*$/gm, "## $1");
   cleaned = cleaned.replace(/^\*\*\s*(\d+\.\s+[^*]+)\s*\*\*:?\s*$/gm, "## $1");
 
-  // 9. Ensure headers (## and ###) have clean newlines around them
   cleaned = cleaned.replace(/([^\n])\n(###?\s+)/g, "$1\n\n$2");
   cleaned = cleaned.replace(/(###?\s+[^\n]+)\n([^\n#])/g, "$1\n\n$2");
 
-  // 10. Clean up multiple empty lines
   cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
 
   return cleaned.trim();
 }
-
 
 function ReportSectionsRenderer({ report }: { report: string }) {
   const sanitized = sanitizeReportMarkdown(report);
@@ -325,7 +310,6 @@ function ReportSectionsRenderer({ report }: { report: string }) {
   );
 }
 
-
 function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: string | null; cleanContent: string }) {
   const [copied, setCopied] = React.useState(false);
 
@@ -338,7 +322,6 @@ function ReportSectionCard({ sectionTitle, cleanContent }: { sectionTitle: strin
       .replace(/^>\s*/gm, "")
       .replace(/\[(NOTICE|FALLBACK ALERT|PROVIDER API KEY WARNING|API KEY WARNING|ALL MODELS EXHAUSTED)\]/g, "")
       .trim();
-
 
     if (cleanContent.startsWith("Error generating research gap report:")) {
       alertMessage = "All AI model providers (Groq, OpenRouter, SambaNova, Gemini) were temporarily unable to process the request due to API rate limits or token quota constraints.\n\n**Action Required**: Please check your API keys in `backend/.env` (e.g. `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `SAMBANOVA_API_KEY`) and verify your account usage limits at your provider console. Alternatively, reduce the number of selected papers and try again.";
@@ -659,17 +642,14 @@ function RichInlineText({ text }: { text: string }) {
   if (!text) return null;
 
   let cleaned = text.replace(/^#+\s*/, "");
-  // Normalize fullwidth/Chinese brackets 【E1】 -> [E1]
   cleaned = cleaned.replace(/【/g, "[").replace(/】/g, "]");
 
-  // Clean prompt artifact shorthand like P1 / P4, P3 / P6-E7, etc.
   cleaned = cleaned.replace(/\b(?:Source\s+)?P\d+\s*(?:[/,-]\s*(?:P\d+|E\d+))*\s*[:\-–—]?\s*(?=\()/gi, "");
   cleaned = cleaned.replace(/\bP\d+\s*[/,-]\s*(?:P\d+|E\d+)\b/gi, "");
   cleaned = cleaned.replace(/\b(?:Source\s+)?P\d+\s*[:\-–—]\s*/gi, "");
   cleaned = cleaned.replace(/(\[[^\]]+\](?:\([^)]+\))?)\s+([.,;:!?])/g, "$1$2");
   cleaned = cleaned.replace(/(\[[^\]]+\]\([^)]+\))(?:\s+\1)+/g, "$1");
 
-  // Sanitize nested bracket links and strip internal chunk numbers (e.g. Chunk 19)
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Chunk\s*\d+\]/gi, "[$1]($2)");
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^\]]+)\]/g, "[$1]($2)");
   cleaned = cleaned.replace(/\[\[([^\]]+)\]\(([^)]+)\)\]/g, "[$1]($2)");
@@ -771,6 +751,5 @@ function RichInlineText({ text }: { text: string }) {
 
 async function renderMarkdownToHtmlString(markdown: string): Promise<string> {
   const { renderToStaticMarkup } = await import("react-dom/server");
-  // Reuse React's escaped text/attribute rendering and the existing HTTP(S) link policy.
   return renderToStaticMarkup(<FormattedBlock text={sanitizeReportMarkdown(markdown)} />);
 }

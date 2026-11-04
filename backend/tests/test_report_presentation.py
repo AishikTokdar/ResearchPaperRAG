@@ -5,7 +5,11 @@ import unittest
 from langchain_core.documents import Document
 
 from app.services.evidence import OMITTED_PASSAGE, format_evidence, ground_answer
-from app.services.report_presentation import GENERAL_GUIDANCE, compact_report_citations, complete_report_sections
+from app.services.report_presentation import (
+    GENERAL_GUIDANCE,
+    compact_report_citations,
+    complete_report_sections,
+)
 
 
 class ReportPresentationTests(unittest.TestCase):
@@ -27,7 +31,15 @@ class ReportPresentationTests(unittest.TestCase):
         self.assertIn("Compare study populations", result)
         self.assertNotIn("cannot", result)
         self.assertIn("did not cite", ground_answer(draft, citations, docs))
-        self.assertIn("did not cite", ground_answer(draft.replace("Compare study populations", "Expect 99% accuracy"), citations, docs, allow_general_guidance=True))
+        self.assertIn(
+            "did not cite",
+            ground_answer(
+                draft.replace("Compare study populations", "Expect 99% accuracy"),
+                citations,
+                docs,
+                allow_general_guidance=True,
+            ),
+        )
         self.assertIn(GENERAL_GUIDANCE, complete_report_sections(result))
 
     def test_rejected_passage_does_not_remove_valid_neighbor(self):

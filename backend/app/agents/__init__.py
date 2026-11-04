@@ -3,7 +3,6 @@ Agent Pipeline Module
 
 Multi-agent architecture for RAG processing.
 Each agent handles a specific step in the pipeline:
-
 1. Extractor     - Retrieves relevant chunks from vector store
 2. Analyzer      - Analyzes context relevance and quality
 3. Preprocessor  - Cleans and normalizes text data

@@ -141,7 +141,6 @@ class VectorStoreService:
         return self.disk_path_for_session(self._session_id)
 
     def _try_load_from_disk(self) -> None:
-        # Never load the old pickle docstore, even when an index.faiss exists.
         path = Path(self._persist_path())
         manifest = path / "metadata.json"
         if not manifest.is_file():
@@ -169,7 +168,7 @@ class VectorStoreService:
                     None,
                 )
                 if candidate is None:
-                    return  # Never substitute an incompatible embedding space.
+                    return
                 emb = self._make_embeddings(*candidate)
             index = faiss.read_index(str(path / "index.faiss"))
             documents = {key: Document(**value) for key, value in data["documents"].items()}
@@ -218,7 +217,6 @@ class VectorStoreService:
                 except Exception:
                     logger.warning("Embedding initialization failed for %s", provider.name)
             local_model = LOCAL_EMBEDDING_MODEL
-            # Construct local embeddings only if remote indexing has not succeeded.
             for emb, spec in embeddings:
                 try:
                     store = FAISS.from_documents(documents, emb)
@@ -263,7 +261,6 @@ class VectorStoreService:
             ]
             state = (store, HybridIndex([doc for doc in documents if isinstance(doc, Document)]))
             self._read_state = state
-        # One immutable store/lexical-index pair per read, even during a replacement upload.
         return state[1].search(state[0], query, k=max(30, k))[:k]
 
     @property

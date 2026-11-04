@@ -24,7 +24,6 @@ export function savePreference<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-        // Fall back when browser storage is unavailable.
       }
 }
 
@@ -78,7 +77,6 @@ export async function saveChatSession(
       tx.onerror = () => rej(tx.error);
     });
   } catch {
-        // Fall back when browser storage is unavailable.
       }
 }
 
@@ -111,7 +109,6 @@ export async function loadChatSession(
   }
 }
 
-/** Delete a single session */
 export async function deleteChatSession(pdfName: string): Promise<void> {
   try {
     const db = await openDB();
@@ -122,11 +119,9 @@ export async function deleteChatSession(pdfName: string): Promise<void> {
       tx.onerror = () => rej(tx.error);
     });
   } catch {
-    /* silently skip */
   }
 }
 
-/** List all saved sessions (most recent first) */
 export async function listChatSessions(): Promise<ChatSession[]> {
   try {
     const db = await openDB();
@@ -146,7 +141,6 @@ export async function listChatSessions(): Promise<ChatSession[]> {
   }
 }
 
-/** Clear all stored sessions */
 export async function clearAllSessions(): Promise<void> {
   try {
     const db = await openDB();
@@ -157,6 +151,5 @@ export async function clearAllSessions(): Promise<void> {
       tx.onerror = () => rej(tx.error);
     });
   } catch {
-    /* silently skip */
   }
 }

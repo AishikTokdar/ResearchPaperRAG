@@ -7,7 +7,6 @@
 
 import type { ChatEntry } from "@/types";
 
-/** New UUID per message when crypto is available (browser chat UI). */
 function newChatEntryId(): string {
   const c = globalThis.crypto;
   if (c && typeof c.randomUUID === "function") {
@@ -19,7 +18,6 @@ function newChatEntryId(): string {
 export type CreateChatEntryInput = Omit<ChatEntry, "id" | "timestamp"> &
   Partial<Pick<ChatEntry, "id" | "timestamp">>;
 
-/** Build a history row with id + timestamp defaults for append and persistence. */
 export function createChatEntry(input: CreateChatEntryInput): ChatEntry {
   return {
     ...input,
@@ -28,7 +26,6 @@ export function createChatEntry(input: CreateChatEntryInput): ChatEntry {
   };
 }
 
-/** Stable React key for a history row (supports IndexedDB sessions saved before id existed). */
 export function getChatEntryReactKey(entry: ChatEntry, index: number): string {
   return entry.id ?? `legacy-${index}-${entry.timestamp?.getTime() ?? 0}`;
 }

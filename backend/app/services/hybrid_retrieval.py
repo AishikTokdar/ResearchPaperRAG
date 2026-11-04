@@ -39,7 +39,6 @@ class HybridIndex:
         return [i for _, i in sorted(scores, key=lambda pair: (-pair[0], pair[1]))[:k]]
 
     def search(self, store: Any, query: str, k: int = 30) -> list[Document]:
-        # One query embedding per facet, irrespective of the number of selected papers.
         dense = store.similarity_search(query, k=min(k, len(self.documents)))
         positions = {self.key(doc): i for i, doc in enumerate(self.documents)}
         dense_ids = [positions[self.key(doc)] for doc in dense if self.key(doc) in positions]

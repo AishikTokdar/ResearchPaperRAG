@@ -16,22 +16,11 @@ from .base_agent import BaseAgent
 
 
 class PreprocessorAgent(BaseAgent):
-    """
-    Agent responsible for cleaning and normalizing text before synthesis.
-
-    Pipeline position: runs *after* AnalyzerAgent and *before* OptimizerAgent.
-    """
-
     def __init__(self):
         super().__init__(name="preprocessor", description="Cleans and normalizes document chunks")
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _normalize_whitespace(text: str) -> str:
-        """Collapse runs of whitespace / blank lines into single newlines."""
         text = text.replace("\r\n", "\n").replace("\r", "\n")
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"[ \t]+", " ", text)
@@ -39,7 +28,6 @@ class PreprocessorAgent(BaseAgent):
 
     @staticmethod
     def _normalize_unicode(text: str) -> str:
-        """NFC-normalize and replace common special-quote chars."""
         text = unicodedata.normalize("NFC", text)
         replacements = {
             "\u2018": "'",
@@ -54,21 +42,7 @@ class PreprocessorAgent(BaseAgent):
             text = text.replace(old, new)
         return text
 
-    # ------------------------------------------------------------------
-    # Pipeline interface
-    # ------------------------------------------------------------------
-
     def process(self, input_data: list[Document], context: dict[str, Any]) -> list[Document]:
-        """
-        Clean every chunk and return the processed list.
-
-        Args:
-            input_data: Filtered document chunks from the AnalyzerAgent.
-            context:    Shared pipeline context dict.
-
-        Returns:
-            List of cleaned Document objects.
-        """
         cleaned: list[Document] = []
         chars_before = 0
         chars_after = 0

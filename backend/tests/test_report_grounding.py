@@ -14,10 +14,16 @@ from app.services.gap_analyzer_engine import REPORT_SECTIONS, GapAnalyzerEngine
 class EvidenceValidationTests(unittest.TestCase):
     def setUp(self):
         self.docs = [
-            Document(page_content="Accuracy was 91.0 % over 1,000 samples at 0.001 seconds.",
-                     metadata={"paper_title": "EEG evaluation", "year": "2025",
-                               "paper_id": "internal-99", "source": "https://example.org/98"}),
-            Document(page_content="The baseline accuracy was 80%.")
+            Document(
+                page_content="Accuracy was 91.0 % over 1,000 samples at 0.001 seconds.",
+                metadata={
+                    "paper_title": "EEG evaluation",
+                    "year": "2025",
+                    "paper_id": "internal-99",
+                    "source": "https://example.org/98",
+                },
+            ),
+            Document(page_content="The baseline accuracy was 80%."),
         ]
         self.citations = format_evidence(self.docs)[1]
 
@@ -36,9 +42,14 @@ class EvidenceValidationTests(unittest.TestCase):
         self.assertIn("not supplied", self.check("Accuracy was 91% [E1; E999]."))
 
     def test_numbers_require_the_cited_passage_even_in_hybrid_mode(self):
-        for answer in ("Accuracy was 80% [E1].", "Accuracy was 99% [E1].",
-                       "There were 3 participants [E1].", "Published in 2030 [E1].",
-                       "There were 99 participants [E1].", "There were 98 participants [E1]."):
+        for answer in (
+            "Accuracy was 80% [E1].",
+            "Accuracy was 99% [E1].",
+            "There were 3 participants [E1].",
+            "Published in 2030 [E1].",
+            "There were 99 participants [E1].",
+            "There were 98 participants [E1].",
+        ):
             with self.subTest(answer=answer):
                 self.assertIn("numerical claim", self.check(answer, allow_background=True))
         self.assertNotIn("cannot", self.check("Published in 2025 [E1]."))
@@ -67,14 +78,22 @@ class EvidenceValidationTests(unittest.TestCase):
         for heading in ("Literature Summary", "Limitations", "Research Gaps"):
             answer = f"## {heading}\n" + "An unsupported finding is claimed here. " * 8
             self.assertIn("did not cite", self.check(answer, allow_background=True))
-        self.assertIn("General explanation", self.check("## Background knowledge\nGeneral explanation.", allow_background=True))
+        self.assertIn(
+            "General explanation",
+            self.check("## Background knowledge\nGeneral explanation.", allow_background=True),
+        )
 
     def test_hypothesis_table_is_allowed_only_in_report_proposal_section(self):
         table = "| Proposed Title | Core Idea | Expected Outcome (hypothesis) |\n| --- | --- | --- |\n| Proposed project | Evaluate robustness | May improve generalization |"
         report = f"## 8. Novel Paper Suggestions\n\n{table}"
         self.assertNotIn("cannot", self.check(report, allow_proposals=True))
         self.assertIn("did not cite", self.check(report))
-        self.assertIn("did not cite", self.check(report.replace("Novel Paper Suggestions", "Common Methods"), allow_proposals=True))
+        self.assertIn(
+            "did not cite",
+            self.check(
+                report.replace("Novel Paper Suggestions", "Common Methods"), allow_proposals=True
+            ),
+        )
 
     def test_tables_keep_markdown_rows_when_one_row_is_omitted(self):
         table = "| Method | Accuracy |\n| --- | --- |\n| Supported [E1] | 91% |\n| Unsupported [E1] | 99% |\n| Baseline [E2] | 80% |"
@@ -88,7 +107,9 @@ class EvidenceValidationTests(unittest.TestCase):
     def test_hostile_exponent_is_bounded_and_url_digits_are_not_metrics(self):
         self.assertIn("numerical claim", self.check("Accuracy was 1e999999999% [E1]."))
         docs = [Document(page_content="See https://example.org/123456 for the study.")]
-        result = ground_answer("There were 123456 participants [E1].", format_evidence(docs)[1], docs)
+        result = ground_answer(
+            "There were 123456 participants [E1].", format_evidence(docs)[1], docs
+        )
         self.assertIn("numerical claim", result)
 
 
@@ -113,7 +134,9 @@ class ReportIntegrationTests(unittest.TestCase):
         engine.llm.stream_text = stream
 
         async def collect():
-            return [event async for event in engine.stream_gap_report("EEG", "gemini", DEFAULT_MODEL)]
+            return [
+                event async for event in engine.stream_gap_report("EEG", "gemini", DEFAULT_MODEL)
+            ]
 
         first, second = asyncio.run(collect())[-1], asyncio.run(collect())[-1]
         self.assertEqual(first["report"], sync_result)
@@ -127,8 +150,21 @@ class ReportIntegrationTests(unittest.TestCase):
 
     def test_followup_does_not_enable_background_bypass(self):
         engine = GapAnalyzerEngine()
-        engine.llm.generate_text = MagicMock(return_value=("## Background knowledge\n" + "Unsupported assertion. " * 40, "fixture", []))
-        result = engine._cached_generate("system", "question", [Document(page_content="Evidence")], DEFAULT_MODEL, "paper_followup", 800)
+        engine.llm.generate_text = MagicMock(
+            return_value=(
+                "## Background knowledge\n" + "Unsupported assertion. " * 40,
+                "fixture",
+                [],
+            )
+        )
+        result = engine._cached_generate(
+            "system",
+            "question",
+            [Document(page_content="Evidence")],
+            DEFAULT_MODEL,
+            "paper_followup",
+            800,
+        )
         self.assertIn("did not cite", result)
         self.assertFalse(engine._cache)
 

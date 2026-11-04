@@ -102,14 +102,11 @@ def ingest_papers(req: IngestPapersRequest, session: ResearchSession = Depends(r
             raise HTTPException(
                 400, "Search for these papers in this session before ingesting them."
             )
-        # Ignore all client-supplied URLs/abstracts; use only metadata returned by server search.
         selected = [dict(session.papers[paper_id]) for paper_id in ids]
         papers_with_text = [(paper, fetcher.download_and_extract_text(paper)) for paper in selected]
         engine = GapAnalyzerEngine()
         count = engine.process_and_index_papers(papers_with_text)
-        session.engine = (
-            engine  # Publish only a successfully built index; keep the old one on failure.
-        )
+        session.engine = engine
         return {"status": "success", "indexed_papers_count": len(selected), "chunks_created": count}
     except HTTPException:
         raise

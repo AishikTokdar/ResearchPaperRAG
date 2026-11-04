@@ -19,8 +19,6 @@ _SEARCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
 
 
 class _TimeoutAdapter(requests.adapters.HTTPAdapter):
-    """The installed arXiv SDK omits a requests timeout; enforce one at transport level."""
-
     def __init__(self, timeout: int):
         super().__init__()
         self.timeout = timeout
@@ -54,12 +52,10 @@ class PaperFetcher:
         try:
             import arxiv
 
-            # Sanitize and truncate extra long search phrases for arXiv API
             clean_q = re.sub(r"[^\w\s]", " ", query).strip()
             search_q = " ".join(clean_q.split()[:10]) if len(clean_q.split()) > 10 else clean_q
 
             client = arxiv.Client(page_size=limit * 2, delay_seconds=3, num_retries=1)
-            # SDK 4.x exposes no timeout option. This verified transport seam has a regression test.
             client._session.mount("https://", _TimeoutAdapter(self.timeout))
             search = arxiv.Search(
                 query=search_q, max_results=limit * 2, sort_by=arxiv.SortCriterion.Relevance
@@ -546,7 +542,6 @@ class PaperFetcher:
                 )
                 paper["evidence_scope"] = "full_text" if parsed["complete"] else "partial_full_text"
             except Exception:
-                # Download failures yield explicitly limited abstract evidence, never fabricated full text.
                 pass
 
         if not extracted_text.strip():

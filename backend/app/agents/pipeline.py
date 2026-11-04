@@ -16,19 +16,6 @@ from .validator import ValidatorAgent
 
 @dataclass
 class PipelineResult:
-    """
-    Result from running the full pipeline.
-
-    Attributes:
-        success: Whether pipeline completed successfully
-        answer: Final generated answer
-        model_used: Model that generated the answer
-        processing_time: Total processing time in seconds
-        agent_results: Results from each agent step
-        context: Final pipeline context with all metadata
-        sources: Page-level source references (when requested)
-    """
-
     success: bool
     answer: str | None = None
     model_used: str | None = None
@@ -40,23 +27,6 @@ class PipelineResult:
 
 
 class AgentPipeline:
-    """
-    Orchestrates the multi-agent RAG pipeline.
-
-    Full pipeline flow (7 agents):
-        1. Extractor      – retrieve relevant chunks from vector store
-        2. Analyzer        – filter low-quality / duplicate chunks
-        3. Preprocessor    – clean & normalize text
-        4. Optimizer       – reorder & trim to token budget
-        5. Synthesizer     – generate answer via LLM
-        6. Validator       – quality-check the answer
-        7. Assembler       – package structured API response
-
-    Usage:
-        pipeline = AgentPipeline(vector_service, llm_service)
-        result = pipeline.run("What does clause 4.2 say?")
-    """
-
     def __init__(
         self,
         vector_service: VectorStoreService,
@@ -82,7 +52,6 @@ class AgentPipeline:
         total_ms: float,
         context: dict[str, Any],
     ) -> PipelineResult:
-        """Convenience builder for an error result."""
         return PipelineResult(
             success=False,
             error=error,
@@ -98,7 +67,6 @@ class AgentPipeline:
         context: dict[str, Any],
         results: list[AgentResult],
     ):
-        """Run one agent step, accumulate results, return (ok, output, total_ms_delta)."""
         result = agent.execute(data, context)
         results.append(result)
         return result.success, result.data, result.duration_ms, result.error
@@ -110,17 +78,6 @@ class AgentPipeline:
         include_sources: bool = False,
         hybrid_mode: bool = False,
     ) -> PipelineResult:
-        """
-        Execute the full 7-step pipeline for a user question.
-
-        Args:
-            question:        The user's natural-language question.
-            model:           Optional model id override.
-            include_sources: Attach page-level source citations.
-
-        Returns:
-            PipelineResult with answer, metadata, and telemetry.
-        """
         context: dict[str, Any] = {
             "question": question,
             "model": model,

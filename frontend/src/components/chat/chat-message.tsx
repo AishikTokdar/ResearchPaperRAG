@@ -43,7 +43,6 @@ function parseInlineMarkdown(text: string): React.ReactNode[] {
 }
 
 function renderFormattedInlineText(text: string) {
-  // Catch document citations in brackets: [Filename.pdf - Page 23] or [Page X, Chunk Y]
   const citationRegex = /(\[(?:[^\]]+\.(?:pdf|doc|docx|txt)\s*-\s*Page\s*\d+[^\]]*|Page\s*\d+[^\]]*)\])/gi;
   const parts = text.split(citationRegex);
 
@@ -101,7 +100,6 @@ export function FormattedMessageContent({ content }: { content: string }) {
       return;
     }
 
-    // Blockquote handling (Warnings & Fallback alerts)
     if (trimmed.startsWith(">")) {
       flushList(`list-${index}`);
       const cleanQuote = trimmed.replace(/^>\s*/, "");
@@ -125,8 +123,6 @@ export function FormattedMessageContent({ content }: { content: string }) {
       );
       return;
     }
-
-    // Header 1, 2, 3
 
     if (trimmed.startsWith("### ")) {
       flushList(`list-${index}`);
@@ -156,7 +152,6 @@ export function FormattedMessageContent({ content }: { content: string }) {
       return;
     }
 
-    // Numbered list items like "1. ", "2. ", "3. "
     const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
     if (numMatch) {
       if (currentList.length > 0 && !isNumbered) {
@@ -171,7 +166,6 @@ export function FormattedMessageContent({ content }: { content: string }) {
       return;
     }
 
-    // Bullet list items like "- ", "• ", "* "
     const bulletMatch = trimmed.match(/^[-•*]\s+(.*)/);
     if (bulletMatch) {
       if (currentList.length > 0 && isNumbered) {
@@ -186,7 +180,6 @@ export function FormattedMessageContent({ content }: { content: string }) {
       return;
     }
 
-    // Normal paragraph line
     flushList(`list-${index}`);
     elements.push(
       <p key={`p-${index}`} className="leading-relaxed my-1">
@@ -243,7 +236,6 @@ export function ChatMessage({
         isUser ? "flex-row-reverse" : "flex-row",
       )}
     >
-      {/* Avatar */}
       <div
         className={cn(
           "shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold border transition-colors",
@@ -255,7 +247,6 @@ export function ChatMessage({
         {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
       </div>
 
-      {/* Message Content */}
       <div
         className={cn(
           "relative max-w-[85%] sm:max-w-[75%] flex flex-col",
@@ -277,7 +268,6 @@ export function ChatMessage({
           )}
         </div>
 
-        {/* Source Citations */}
         {!isUser && formattedSources.length > 0 && (
           <div className="mt-2 w-full">
             <button
@@ -304,7 +294,6 @@ export function ChatMessage({
           </div>
         )}
 
-        {/* Footer Meta */}
         <div
           className={cn(
             "flex items-center gap-2 mt-1.5 px-1 text-xs text-zinc-400 dark:text-zinc-500",

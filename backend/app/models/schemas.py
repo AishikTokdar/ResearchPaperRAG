@@ -11,23 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-# ============================================================================
-# Request Models
-# ============================================================================
-
 
 class QuestionRequest(BaseModel):
-    """
-    Request body for asking questions about uploaded PDFs.
-
-    Attributes:
-        question: The user's question about the document
-        model: Optional model override (uses default if not specified)
-        include_sources: Whether to include source chunks in response
-        hybrid_mode: Whether to enable Hybrid Brain Mode (PDF + AI Pretrained Knowledge - NotebookLM style)
-        knowledge_mode: "hybrid" (PDF + General AI Knowledge) or "strict" (PDF Only)
-    """
-
     question: str = Field(..., min_length=1, max_length=2000)
     model: str | None = Field(default=None, max_length=150)
     include_sources: bool = True
@@ -49,22 +34,7 @@ class QuestionRequest(BaseModel):
         return self
 
 
-# ============================================================================
-# Response Models
-# ============================================================================
-
-
 class AnswerResponse(BaseModel):
-    """
-    Response containing the AI-generated answer.
-
-    Attributes:
-        answer: The generated answer text
-        model_used: Which model generated the response
-        sources: Optional list of source chunks used
-        processing_time: Time taken to generate response
-    """
-
     answer: str
     model_used: str | None = None
     sources: list[str] | None = None
@@ -73,27 +43,12 @@ class AnswerResponse(BaseModel):
 
 
 class DocumentFileMeta(BaseModel):
-    """
-    Metadata for a single uploaded document.
-    """
-
     file_name: str
     page_count: int
     chunks_created: int
 
 
 class UploadResponse(BaseModel):
-    """
-    Response after PDF upload and processing.
-
-    Attributes:
-        message: Success message
-        chunks_created: Total number of text chunks created across all uploaded files
-        file_name: Name of primary uploaded file
-        files: Metadata list of all active uploaded documents
-        total_files: Total active document count
-    """
-
     message: str
     chunks_created: int
     file_name: str | None = None
@@ -102,18 +57,6 @@ class UploadResponse(BaseModel):
 
 
 class StatusResponse(BaseModel):
-    """
-    System status response.
-
-    Attributes:
-        status: Current status (running, error, etc.)
-        message: Human-readable status message
-        pdf_loaded: Whether a PDF is currently loaded
-        model: Currently configured model
-        documents_loaded: Count of active loaded documents
-        server_boot_id: Unique UUID generated on each backend server startup
-    """
-
     status: str = "running"
     message: str
     pdf_loaded: bool = False
@@ -123,10 +66,6 @@ class StatusResponse(BaseModel):
 
 
 class ModelInfo(BaseModel):
-    """
-    Information about an available AI model.
-    """
-
     id: str
     name: str
     provider: str
@@ -138,21 +77,11 @@ class ModelInfo(BaseModel):
 
 
 class ModelsResponse(BaseModel):
-    """
-    Response listing available models.
-
-    Attributes:
-        models: List of available models
-        default_model: Current default model ID
-    """
-
     models: list[ModelInfo]
     default_model: str
 
 
 class RuntimeProviderRow(BaseModel):
-    """One row in the public runtime / provider dashboard."""
-
     id: str
     display_name: str
     llm_ready: bool
@@ -161,8 +90,6 @@ class RuntimeProviderRow(BaseModel):
 
 
 class RuntimeSummaryResponse(BaseModel):
-    """Aggregated provider health for ``GET /runtime-summary`` (SPA dashboard)."""
-
     status: str
     providers: int
     working: int
@@ -185,31 +112,11 @@ class RuntimeSummaryResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """
-    Standard error response.
-
-    Attributes:
-        detail: Error message
-        error_code: Optional error code for programmatic handling
-    """
-
     detail: str
     error_code: str | None = None
 
 
 class AgentStepInfo(BaseModel):
-    """
-    Information about an agent pipeline step.
-
-    Used for debugging and transparency about RAG process.
-
-    Attributes:
-        agent: Name of the agent
-        input_summary: Summary of input data
-        output_summary: Summary of output data
-        duration_ms: Processing time in milliseconds
-    """
-
     agent: str
     input_summary: str
     output_summary: str

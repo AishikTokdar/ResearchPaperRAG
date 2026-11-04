@@ -15,7 +15,6 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
-    // Production must ignore an attacker-controlled API override in a shared URL.
     await page.goto(`${origin}/chat?api_url=https://invalid.example`);
     await page.getByRole("heading", { name: "Research Gap Analyzer", exact: true }).waitFor();
     await page.getByRole("button", { name: "Search Research Papers", exact: true }).click();
@@ -27,7 +26,6 @@ async function main() {
       name: "integration.PDF", mimeType: "application/pdf", buffer: Buffer.from(pdf),
     });
     await page.getByRole("button", { name: "Academic Search", exact: true }).click();
-    // A new search must reserve space for an already attached PDF.
     const searchedAgain = page.waitForResponse(response => response.url().endsWith("/api/papers/search") && response.request().method() === "POST");
     await page.getByRole("button", { name: "Search Research Papers", exact: true }).click();
     assert.equal((await searchedAgain).status(), 200);
@@ -49,7 +47,6 @@ async function main() {
     await page.keyboard.press("Escape");
     assert.equal(await modelTrigger.innerText(), selectedModel, "Provider filtering must not select a different model");
     assert.equal(await modelTrigger.evaluate(element => element === document.activeElement), true);
-    // Exercise the actual download handlers, including PDF rendering in dark mode.
     const originalClass = await page.locator("html").getAttribute("class");
     await page.evaluate(() => document.documentElement.classList.add("dark"));
     for (const format of ["Markdown", "text", "PDF"]) {
@@ -104,7 +101,6 @@ async function main() {
     const after = await page.evaluate(() => localStorage.getItem("research-paper-rag-api-session-id"));
     assert.notEqual(after, before);
 
-    // Attach a PDF while a search is in flight; late results must reserve its slot.
     const racePage = await browser.newPage();
     let releaseSearch;
     let searchStarted;

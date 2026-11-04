@@ -166,10 +166,8 @@ export function PDFUpload({
             exit={{ opacity: 0, y: -5 }}
             className="space-y-2"
           >
-            {/* Prominent Big Ready Card */}
             <GlassCard variant="default" padding="default" className="border-emerald-500/50 bg-emerald-500/15 dark:bg-emerald-950/40 shadow-sm overflow-hidden">
               <div className="flex flex-col space-y-3.5">
-                {/* Header Row: Status Check & Action Buttons */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="p-2 rounded-xl bg-emerald-500/25 text-emerald-600 dark:text-emerald-300 shrink-0">
@@ -205,7 +203,6 @@ export function PDFUpload({
                   </div>
                 </div>
 
-                {/* Stat Badges Row: Clear, spacious horizontal pills */}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 text-xs font-bold border border-emerald-300/40 dark:border-emerald-700/60 shadow-xs">
                     <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -220,7 +217,6 @@ export function PDFUpload({
                   )}
                 </div>
 
-                {/* Active Files List */}
                 {files.length > 0 && (
                   <div className="pt-2 border-t border-emerald-500/20 space-y-1">
                     {files.map((doc, idx) => (
@@ -240,7 +236,6 @@ export function PDFUpload({
                   </div>
                 )}
 
-                {/* Collapsible Pipeline Details */}
                 {showDetails && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}

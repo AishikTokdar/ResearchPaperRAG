@@ -44,7 +44,6 @@ const MAX_SELECTED_PAPERS = 5;
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_YEAR = CURRENT_YEAR - 2;
 
-
 export function ChatPage() {
   const reducedMotion = useReducedMotion();
   const [searchError, setSearchError] = React.useState<string | null>(null);
@@ -351,7 +350,7 @@ export function ChatPage() {
             <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 shrink-0">
               <Sliders className="w-4 h-4 text-indigo-500" /> Analysis model
             </span>
-            
+
             <div className="w-full min-w-0 sm:w-72 md:w-80">
               <ModelSelector
                 disabled={isAnalyzing || isAsking}

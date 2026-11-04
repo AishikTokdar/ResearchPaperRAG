@@ -127,7 +127,6 @@ class GapAnalyzerEngine:
             raise ValueError("No readable paper text was found")
         if len(chunks) > settings.max_document_chunks:
             raise ValueError("Paper selection exceeds the indexing limit")
-        # FAISS avoids a shared default Chroma collection across unrelated sessions.
         store = FAISS.from_documents(chunks, get_local_embeddings(LOCAL_EMBEDDING_MODEL))
         self.vector_store, self.documents, self.paper_metadata_list = store, chunks, metadata
         self._hybrid = HybridIndex(chunks)
@@ -152,7 +151,6 @@ class GapAnalyzerEngine:
         ]
 
     def _report_documents(self, topic: str) -> list[Document]:
-        # Several local retrieval queries cover distinct report requirements, with one generation.
         groups = [
             self._get_balanced_documents(f"{topic} {section}", top_k_per_paper=2)
             for section in (
@@ -187,7 +185,12 @@ class GapAnalyzerEngine:
         ).hexdigest()
 
     def _remember(self, key: str, answer: str) -> None:
-        if GENERAL_GUIDANCE in answer or "General guidance:" in answer or OMITTED_PASSAGE in answer or answer.startswith(("I cannot verify", "I cannot provide a grounded")):
+        if (
+            GENERAL_GUIDANCE in answer
+            or "General guidance:" in answer
+            or OMITTED_PASSAGE in answer
+            or answer.startswith(("I cannot verify", "I cannot provide a grounded"))
+        ):
             return
         with self._cache_lock:
             self._cache[key] = answer
@@ -217,7 +220,10 @@ class GapAnalyzerEngine:
             system, question, evidence, model, feature, max_tokens
         )
         answer = ground_answer(
-            answer, citations, docs, preserve_valid_blocks=feature == "gap_report",
+            answer,
+            citations,
+            docs,
+            preserve_valid_blocks=feature == "gap_report",
             allow_proposals=feature == "gap_report",
             allow_general_guidance=feature == "gap_report",
         )
@@ -236,19 +242,26 @@ class GapAnalyzerEngine:
 
     @staticmethod
     def _verified_sections(report: str) -> list[int]:
-        """A heading alone or an omitted passage is not a completed section."""
-        return list(dict.fromkeys(
-            int(match[1]) for match in re.finditer(
-                r"(?ms)^##\s+([1-8])\.\s+[^\n]+\n(.*?)(?=^##\s+|\Z)", report
-            ) if match[2].strip() and OMITTED_PASSAGE not in match[2]
-            and GENERAL_GUIDANCE not in match[2] and "General guidance:" not in match[2]
-        ))
+        return list(
+            dict.fromkeys(
+                int(match[1])
+                for match in re.finditer(
+                    r"(?ms)^##\s+([1-8])\.\s+[^\n]+\n(.*?)(?=^##\s+|\Z)", report
+                )
+                if match[2].strip()
+                and OMITTED_PASSAGE not in match[2]
+                and GENERAL_GUIDANCE not in match[2]
+                and "General guidance:" not in match[2]
+            )
+        )
 
     @staticmethod
     def _limited_coverage(docs: list[Document]) -> bool:
-        return any(doc.metadata.get("evidence_scope") in {
-            "abstract_only", "metadata_only", "partial_full_text"
-        } for doc in docs)
+        return any(
+            doc.metadata.get("evidence_scope")
+            in {"abstract_only", "metadata_only", "partial_full_text"}
+            for doc in docs
+        )
 
     def generate_gap_report(
         self,
@@ -375,7 +388,14 @@ class GapAnalyzerEngine:
             "sections_completed": seen[:-1] if incomplete else seen,
             "words_generated": len(draft.split()),
         }
-        report = ground_answer(draft, citations, docs, preserve_valid_blocks=True, allow_proposals=True, allow_general_guidance=True)
+        report = ground_answer(
+            draft,
+            citations,
+            docs,
+            preserve_valid_blocks=True,
+            allow_proposals=True,
+            allow_general_guidance=True,
+        )
         report = complete_report_sections(report)
         verified_sections = self._verified_sections(report)
         if not warnings and len(verified_sections) == 8:
@@ -384,8 +404,6 @@ class GapAnalyzerEngine:
         if warnings:
             report += "\n\n> " + " ".join(warnings)
         if incomplete and verified_sections:
-            # Exclude the last section actually drafted, not an earlier valid one
-            # when the interrupted last section has already failed validation.
             drafted = re.findall(r"(?m)^##\s+([1-8])\.", draft)
             if drafted:
                 verified_sections = [n for n in verified_sections if n != int(drafted[-1])]
@@ -441,7 +459,6 @@ class GapAnalyzerEngine:
         self._validate_model(provider, model_name, api_key)
         if self.vector_store is None:
             raise ValueError("Load papers in this session first")
-        # Previous answers are conversational context, never documentary evidence.
         with self._cache_lock:
             history = list(self._history[-2:])
         context = "\n".join(

@@ -20,7 +20,9 @@ def document_splitter(chunk_size: int = 224, overlap: int = 32):
     return RecursiveCharacterTextSplitter(
         chunk_size=min(254, chunk_size),
         chunk_overlap=min(overlap, chunk_size - 1),
-        length_function=lambda text: len(tokenizer.encode(text, add_special_tokens=False, verbose=False)),
+        length_function=lambda text: len(
+            tokenizer.encode(text, add_special_tokens=False, verbose=False)
+        ),
         separators=["\n\n", "\n", ". ", "; ", " ", ""],
     )
 
@@ -28,7 +30,6 @@ def document_splitter(chunk_size: int = 224, overlap: int = 32):
 def split_documents(
     documents: list[Document], chunk_size: int = 224, overlap: int = 32
 ) -> list[Document]:
-    # Keep page provenance and split recognizable section headings before token chunking.
     sections = []
     heading = re.compile(
         r"(?m)^(?:#{1,3}\s+.+|(?:\d+(?:\.\d+)*\.?\s+)?(?:Abstract|Introduction|Methods?|Materials and Methods|Results|Discussion|Conclusions?|Limitations|References))\s*$",

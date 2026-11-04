@@ -19,13 +19,11 @@ from ..services.vector_store import VectorStoreService
 
 router = APIRouter(tags=["Document Ingestion"])
 
-# Global services (initialized in main.py and injected)
 _pdf_processor: PDFProcessor | None = None
 _vector_registry: SessionVectorRegistry | None = None
 
 
 def get_pdf_processor() -> PDFProcessor:
-    """Dependency to get PDF processor."""
     global _pdf_processor
     if _pdf_processor is None:
         _pdf_processor = PDFProcessor()
@@ -43,7 +41,6 @@ def get_vector_registry() -> SessionVectorRegistry:
 def require_session_id(
     x_chat_session_id: Annotated[str | None, Header()] = None,
 ) -> str:
-    """Anonymous browser session (UUID). No auth — isolates FAISS per tab/device."""
     sid = (x_chat_session_id or "").strip()
     if not sid or not is_valid_session_id(sid):
         raise HTTPException(
@@ -60,7 +57,6 @@ def get_vector_service(
 
 
 def set_services(pdf_processor: PDFProcessor, vector_registry: SessionVectorRegistry):
-    """Set global services from main app."""
     global _pdf_processor, _vector_registry
     _pdf_processor = pdf_processor
     _vector_registry = vector_registry
@@ -73,10 +69,6 @@ async def upload_pdf(
     pdf_processor: PDFProcessor = Depends(get_pdf_processor),
     vector_service: VectorStoreService = Depends(get_vector_service),
 ):
-    """
-    Upload and process up to 3 PDF files.
-    The total combined size of all uploaded files must be <= 50 MB.
-    """
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
     if len(files) > 3:
@@ -162,7 +154,9 @@ async def upload_pdf(
     try:
         await run_in_threadpool(vector_service.create_from_documents, all_chunks)
     except Exception:
-        raise HTTPException(503, "Document indexing is unavailable. Check server storage and retry.") from None
+        raise HTTPException(
+            503, "Document indexing is unavailable. Check server storage and retry."
+        ) from None
     increment_pdf_uploads()
 
     first_file = file_metas[0].file_name if file_metas else None
@@ -181,9 +175,6 @@ async def upload_pdf(
 async def get_status(
     vector_service: VectorStoreService = Depends(get_vector_service),
 ):
-    """
-    Get current system status for this browser session.
-    """
     from ..main import SERVER_BOOT_ID
 
     settings = get_settings()

@@ -1,4 +1,5 @@
 """Offline progress-stream regressions; no external model or paper APIs are called."""
+
 import asyncio
 import json
 import sys
@@ -30,17 +31,42 @@ def parse_events(text):
 class ReportProgressTests(unittest.TestCase):
     def test_progress_tracks_observed_sections_and_only_final_report_is_grounded(self):
         engine = GapAnalyzerEngine()
-        engine._report_documents = MagicMock(return_value=[Document(page_content="Supported result", metadata={"source_file": "Paper.pdf", "page": 0})])
+        engine._report_documents = MagicMock(
+            return_value=[
+                Document(
+                    page_content="Supported result",
+                    metadata={"source_file": "Paper.pdf", "page": 0},
+                )
+            ]
+        )
+
         async def tokens(*args):
             for index, title in enumerate(REPORT_SECTIONS, 1):
                 yield {"type": "token", "content": f"## {index}. "}
                 yield {"type": "token", "content": f"{title}\nSupported result [E1].\n\n"}
-            yield {"type": "complete", "answer": "\n".join(f"## {i}. {title}\nSupported [E1]." for i, title in enumerate(REPORT_SECTIONS, 1)), "warnings": []}
+            yield {
+                "type": "complete",
+                "answer": "\n".join(
+                    f"## {i}. {title}\nSupported [E1]."
+                    for i, title in enumerate(REPORT_SECTIONS, 1)
+                ),
+                "warnings": [],
+            }
+
         engine.llm.stream_text = tokens
+
         async def collect():
-            return [event async for event in engine.stream_gap_report("topic", "gemini", "gemini-3.8-flash")]
+            return [
+                event
+                async for event in engine.stream_gap_report("topic", "gemini", "gemini-3.8-flash")
+            ]
+
         events = asyncio.run(collect())
-        generating = [event for event in events if event["stage"] == "generate" and event.get("current_section")]
+        generating = [
+            event
+            for event in events
+            if event["stage"] == "generate" and event.get("current_section")
+        ]
         first = next(event for event in generating if event["current_section"] == 1)
         second = next(event for event in generating if event["current_section"] == 2)
         self.assertEqual(first["sections_completed"], [])
@@ -54,8 +80,13 @@ class ReportProgressTests(unittest.TestCase):
         engine = GapAnalyzerEngine()
         engine._report_documents = MagicMock(return_value=[])
         engine.llm = MagicMock()
+
         async def collect():
-            return [event async for event in engine.stream_gap_report("topic", "gemini", "gemini-3.8-flash")]
+            return [
+                event
+                async for event in engine.stream_gap_report("topic", "gemini", "gemini-3.8-flash")
+            ]
+
         events = asyncio.run(collect())
         engine.llm.stream_text.assert_not_called()
         self.assertIn("Insufficient evidence", events[-1]["report"])
@@ -63,10 +94,19 @@ class ReportProgressTests(unittest.TestCase):
     def test_uploaded_passages_are_indexed_in_same_research_engine(self):
         engine = GapAnalyzerEngine()
         paper = {"id": "uploaded", "title": "Uploaded.pdf"}
-        chunks = [Document(page_content="Uploaded evidence", metadata={"paper_id": "uploaded", "page": 0})]
+        chunks = [
+            Document(page_content="Uploaded evidence", metadata={"paper_id": "uploaded", "page": 0})
+        ]
         progress = []
-        with patch("app.services.gap_analyzer_engine.get_local_embeddings", return_value=object()), patch("app.services.gap_analyzer_engine.FAISS.from_documents", return_value=object()) as index:
-            count = engine.process_and_index_papers([], uploaded_papers=[(paper, chunks)], on_progress=progress.append)
+        with (
+            patch("app.services.gap_analyzer_engine.get_local_embeddings", return_value=object()),
+            patch(
+                "app.services.gap_analyzer_engine.FAISS.from_documents", return_value=object()
+            ) as index,
+        ):
+            count = engine.process_and_index_papers(
+                [], uploaded_papers=[(paper, chunks)], on_progress=progress.append
+            )
         self.assertEqual(count, 1)
         self.assertEqual(index.call_args.args[0], chunks)
         self.assertEqual(engine.paper_metadata_list, [paper])
@@ -77,7 +117,9 @@ class ReportProgressTests(unittest.TestCase):
         old = session.engine = object()
         cancelled = threading.Event()
         cancelled.set()
-        with patch("app.services.analysis_progress.PaperFetcher.download_and_extract_text") as download:
+        with patch(
+            "app.services.analysis_progress.PaperFetcher.download_and_extract_text"
+        ) as download:
             with self.assertRaises(InterruptedError):
                 prepare_analysis(session, [{"id": "p"}], [], lambda event: None, cancelled)
         download.assert_not_called()
@@ -101,16 +143,31 @@ class StreamEndpointTests(unittest.TestCase):
         self.headers = {"X-Chat-Session-Id": str(uuid4())}
         self.session = routes.sessions.get(self.headers["X-Chat-Session-Id"])
         self.session.papers["known"] = {"id": "known", "title": "Trusted paper"}
-        self.form = {"topic": "research", "paper_ids": '["known"]', "provider": "gemini", "model_name": "gemini-3.8-flash"}
+        self.form = {
+            "topic": "research",
+            "paper_ids": '["known"]',
+            "provider": "gemini",
+            "model_name": "gemini-3.8-flash",
+        }
 
     def test_stream_prepares_sources_and_emits_done_with_final_report(self):
         class Engine:
             async def stream_gap_report(self, *args):
                 yield {"stage": "generate", "percent": 60, "message": "Writing Literature Summary"}
-                yield {"stage": "verify", "percent": 99, "report": "Grounded final report", "sections_completed": [1]}
+                yield {
+                    "stage": "verify",
+                    "percent": 99,
+                    "report": "Grounded final report",
+                    "sections_completed": [1],
+                }
+
         with patch.object(routes, "prepare_analysis", return_value=Engine()) as prepare:
-            response = self.client.post("/api/analyze/stream", headers=self.headers, data=self.form,
-                files=[("files", ("uploaded.pdf", b"%PDF-test", "application/pdf"))])
+            response = self.client.post(
+                "/api/analyze/stream",
+                headers=self.headers,
+                data=self.form,
+                files=[("files", ("uploaded.pdf", b"%PDF-test", "application/pdf"))],
+            )
         self.assertEqual(response.status_code, 200, response.text)
         events = parse_events(response.text)
         self.assertEqual(events[-1][0], "done")
@@ -122,15 +179,28 @@ class StreamEndpointTests(unittest.TestCase):
 
     def test_unknown_ids_and_invalid_files_are_rejected_before_work(self):
         with patch.object(routes, "prepare_analysis") as prepare:
-            response = self.client.post("/api/analyze/stream", headers=self.headers, data={**self.form, "paper_ids": '["unknown"]'})
+            response = self.client.post(
+                "/api/analyze/stream",
+                headers=self.headers,
+                data={**self.form, "paper_ids": '["unknown"]'},
+            )
             self.assertEqual(response.status_code, 400)
-            response = self.client.post("/api/analyze/stream", headers=self.headers, data=self.form,
-                files=[("files", ("fake.pdf", b"not a PDF", "application/pdf"))])
+            response = self.client.post(
+                "/api/analyze/stream",
+                headers=self.headers,
+                data=self.form,
+                files=[("files", ("fake.pdf", b"not a PDF", "application/pdf"))],
+            )
             self.assertEqual(response.status_code, 400)
             prepare.assert_not_called()
 
     def test_failure_emits_error_not_false_completion_or_private_diagnostics(self):
-        with patch.object(routes, "prepare_analysis", side_effect=RuntimeError("private diagnostic")), patch.object(routes.logger, "exception"):
+        with (
+            patch.object(
+                routes, "prepare_analysis", side_effect=RuntimeError("private diagnostic")
+            ),
+            patch.object(routes.logger, "exception"),
+        ):
             response = self.client.post("/api/analyze/stream", headers=self.headers, data=self.form)
         events = parse_events(response.text)
         self.assertEqual(events[-1][0], "error")

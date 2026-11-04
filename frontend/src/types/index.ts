@@ -186,7 +186,6 @@ export const AI_MODELS: AIModel[] = modelCatalog.providers.flatMap((provider) =>
   provider.models.map((model) => ({
     id: model.id, name: model.name, provider: provider.name as AIProvider,
     isDefault: model.id === modelCatalog.default_model && provider.name === modelCatalog.default_provider,
-    // Offline catalog is descriptive, not evidence of credentials or current quota.
     isAvailable: false, accessTier: provider.access_tier,
     description: `${model.preview ? "Preview · " : ""}${provider.access_tier === "free" ? "Free tier, subject to quotas" : provider.access_tier === "trial" ? "Trial credits; server opt-in required" : "Purchased credits; server opt-in required"}`,
     apiKeyEnv: provider.api_key_env,
