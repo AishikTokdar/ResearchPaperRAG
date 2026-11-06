@@ -34,6 +34,11 @@ async function main() {
     await run.click();
     await page.getByText("The evaluated retrieval method measured accuracy of 91%", { exact: false }).first().waitFor({ timeout: 60000 });
     assert.ok(await page.getByText("91%", { exact: false }).count());
+    const reportText = await page.locator("#report").innerText();
+    for (const number of [1, 2, 3, 4]) {
+      assert.ok(reportText.includes(`Retrieval evaluation study ${number}`), `Selected paper ${number} missing from report`);
+    }
+    assert.ok(reportText.includes("integration.PDF"), "Selected upload missing from report");
     assert.equal(await page.getByRole("button", { name: "Save Model", exact: true }).isDisabled(), true);
     const topicInput = page.getByLabel("Research topic", { exact: true });
     const originalTopic = await topicInput.inputValue();

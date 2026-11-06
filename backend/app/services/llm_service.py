@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import threading
 import time
 from collections.abc import AsyncGenerator, Iterator
@@ -157,28 +158,42 @@ knowledge to a paper or attach evidence citations to unsupported background clai
         return sequence
 
     def _attempts(
-        self, model: str | None
+        self, model: str | None, *, wait_for_quota: bool = False
     ) -> Iterator[tuple[AIProvider, str, str, float, str, int]]:
         deadline = time.monotonic() + self.settings.llm_request_deadline_seconds
         count = 0
+        primary: list[tuple[AIProvider, str, str]] = []
+        extra_keys: list[tuple[AIProvider, str, str]] = []
         for provider, model_id in self._llm_attempt_sequence(model or self.model):
-            for key in self._resolve_llm_api_keys(provider):
+            keys = self._resolve_llm_api_keys(provider)
+            if keys:
+                primary.append((provider, model_id, keys[0]))
+                extra_keys.extend((provider, model_id, key) for key in keys[1:])
+        # Provider/model alternatives precede extra keys, which may share the
+        # same organization-level quota. Keep one total attempt/deadline budget.
+        for provider, model_id, key in primary + extra_keys:
+            signature = hashlib.sha256(f"{provider.name}:{key}".encode()).hexdigest()
+            for _ in range(self.settings.llm_max_attempts if wait_for_quota else 1):
                 remaining = deadline - time.monotonic()
                 if count >= self.settings.llm_max_attempts or remaining <= 0:
                     return
-                signature = hashlib.sha256(f"{provider.name}:{key}".encode()).hexdigest()
                 with _cooldown_lock:
-                    if _cooldowns.get(signature, 0) > time.monotonic():
-                        continue
+                    delay = _cooldowns.get(signature, 0) - time.monotonic()
+                if delay > 0:
+                    if not wait_for_quota or delay > 30 or delay >= remaining:
+                        break
+                    # Report completion runs in a bounded worker, not the SSE
+                    # event loop. Honor a short provider Retry-After once.
+                    time.sleep(delay)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return
                 count += 1
-                yield (
-                    provider,
-                    model_id,
-                    key,
-                    min(remaining, self.settings.llm_timeout_seconds),
-                    signature,
-                    count,
-                )
+                yield (provider, model_id, key, min(remaining, self.settings.llm_timeout_seconds), signature, count)
+                with _cooldown_lock:
+                    delay = _cooldowns.get(signature, 0) - time.monotonic()
+                if not wait_for_quota or not 0 < delay <= 30:
+                    break
 
     @staticmethod
     def _failure(provider: AIProvider, model: str, signature: str, error: Exception) -> None:
@@ -188,12 +203,24 @@ knowledge to a paper or attach evidence citations to unsupported background clai
         else:
             record_failure(model)
         if auth or getattr(error, "status_code", None) == 429:
+            cooldown = 300.0 if auth else 60.0
+            if not auth:
+                headers = getattr(getattr(error, "response", None), "headers", {})
+                try:
+                    retry_after = float(headers.get("retry-after", "0"))
+                    if retry_after <= 0:
+                        hint = re.search(r"try again in\s+(\d+(?:\.\d+)?)(ms|s)\b", str(error), re.I)
+                        retry_after = float(hint[1]) / (1000 if hint and hint[2].lower() == "ms" else 1) if hint else 0
+                    if 0 < retry_after <= 30:
+                        cooldown = min(30.0, retry_after + 0.5)
+                except (TypeError, ValueError):
+                    pass
             with _cooldown_lock:
                 now = time.monotonic()
                 for expired in [key for key, until in _cooldowns.items() if until <= now]:
                     del _cooldowns[expired]
                 if len(_cooldowns) < 10000:
-                    _cooldowns[signature] = now + (300 if auth else 60)
+                    _cooldowns[signature] = now + cooldown
         logger.warning(
             "LLM attempt failed provider=%s model=%s error_type=%s: %s",
             provider.name,
@@ -223,7 +250,9 @@ knowledge to a paper or attach evidence citations to unsupported background clai
         max_tokens: int,
     ) -> tuple[str, str, list[str]]:
         messages = self._messages(system, question, evidence)
-        for provider, model_id, key, timeout, signature, attempt in self._attempts(model):
+        for provider, model_id, key, timeout, signature, attempt in self._attempts(
+            model, wait_for_quota=feature in {"gap_report", "report_guidance"}
+        ):
             try:
                 llm = self._build_llm_with_key(provider, model_id, key, max_tokens, timeout)
                 response = llm.invoke(
@@ -302,10 +331,27 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                     event["answer"] += "\n\n> " + " ".join(event["warnings"])
             yield event
 
+    async def _stream_attempts(self, model: str | None, feature: str):
+        deadline = time.monotonic() + self.settings.llm_request_deadline_seconds
+        count = 0
+        for provider, model_id, key, timeout, signature, _ in self._attempts(model):
+            for retry in range(self.settings.llm_max_attempts if feature == "gap_report_stream" else 1):
+                if retry:
+                    with _cooldown_lock:
+                        delay = _cooldowns.get(signature, 0) - time.monotonic()
+                    if not 0 < delay <= 30 or delay >= deadline - time.monotonic():
+                        break
+                    await asyncio.sleep(delay)
+                remaining = deadline - time.monotonic()
+                if count >= self.settings.llm_max_attempts or remaining <= 0:
+                    return
+                count += 1
+                yield provider, model_id, key, min(timeout, remaining), signature, count
+
     async def stream_text(
         self, messages: list, model: str | None, feature: str, max_tokens: int
     ) -> AsyncGenerator[dict[str, Any], None]:
-        for provider, model_id, key, timeout, signature, attempt in self._attempts(model):
+        async for provider, model_id, key, timeout, signature, attempt in self._stream_attempts(model, feature):
             answer = ""
             finish_reason = None
             try:

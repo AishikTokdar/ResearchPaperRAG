@@ -52,6 +52,11 @@ nosetests.xml
 coverage.xml
 *.cover
 .pytest_cache/
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+blob-report/
 
 # mypy & Ruff
 .mypy_cache/
@@ -109,6 +114,10 @@ temp/
 *.temp
 *.bak
 .comment_backups/
+# Local dependency-audit snapshots (keep scripts/audit_core.py in source control)
+/core-audit.json
+/core-profile-audit.json
+/core-audit-requirements.txt
 
 # ============================================================================
 # Docker & Deployment Artifacts

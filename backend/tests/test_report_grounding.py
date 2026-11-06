@@ -144,7 +144,9 @@ class ReportIntegrationTests(unittest.TestCase):
         self.assertTrue(first["limited"])
         self.assertNotIn(2, first["sections_completed"])
         self.assertIn(8, first["sections_completed"])
-        self.assertIn("General guidance (not findings", first["report"])
+        # Invalid model completion must be disclosed, not disguised as canned analysis.
+        self.assertIn("> Partial report:", first["report"])
+        self.assertIn("Trend Detection", first["report"])
         self.assertEqual(len(calls), 2)
         self.assertEqual(len(engine._cache), 0)
 

@@ -18,11 +18,28 @@ Tests cover session isolation/eviction, safe downloads, body/resource limits, CO
 
 `tests/test_report_resilience.py` checks compound citations, equivalent numeric formats, unsupported/uncited passages, retained report sections, valid Markdown tables, hostile exponents, empty section headings, cache eligibility, abstract coverage, provider interruption and preservation of short PDF results. These are deterministic regressions, not a live-provider quality benchmark.
 
-`tests/test_report_presentation.py` checks labeled general guidance for missing/rejected sections, strict-mode isolation, retained valid passages, compact page citations and source lists. Frontend regressions cover proposal-table separators/first rows, export headings, duplicate citations, and guidance paragraphs after lists. Mixed-source/metadata-only regressions ensure missing sections can receive one small model guidance pass without resending document contents, while numeric claims/citations in that guidance are rejected and provider failure preserves the report. Complete reports and interrupted drafts do not trigger that extra pass.
+`tests/test_report_presentation.py` checks labeled general guidance for missing/rejected sections, strict-mode isolation, retained valid passages, compact page citations and source lists. Frontend regressions cover proposal-table separators/first rows, export headings, duplicate citations, and guidance paragraphs after lists. Report-completion regressions ensure missing sections receive targeted model guidance without resending full document contents, while numeric claims/citations in that guidance are rejected and provider failure preserves the report. At most one follow-on pass covers only sections still missing; accepted sections are retained. Complete reports and interrupted drafts do not trigger extra completion. Provider tests verify alternative providers/models are considered before extra keys that may share a quota.
 
 `backend/tests/integration_server.py` is a loopback-only fixture. Never deploy it: it substitutes external generation/download/embedding boundaries and exposes a test PDF route. Other app/parser/FAISS/session/SSE behavior is real.
 
+`tests/test_five_source_reports.py` checks all five source identities through context budgeting, metadata-only coverage, restoration of omitted source summaries and source-list generation. It also verifies abstract preference over bibliography passages, rejection of unselected bibliography titles as summary entries, targeted model completion, retained table headers, safe guidance formatting, and rejection of invented statistical/latency targets. Sequential list labels and recognizable model versions in qualitative guidance are not treated as experimental metrics. Provider failure produces an explicit partial report instead of canned analysis. A local browser run on 2026-11-05 submitted five actual paper IDs for educational RAG chatbots and verified all five source URLs, all eight sections and zero static fallback paragraphs in the generated Markdown. TXT/PDF downloads and mobile reflow passed; all three PDF pages were rendered and visually inspected. The deterministic browser integration additionally checks each selected fetched-paper title and the uploaded PDF remain in the report.
+
 ## Frontend
+
+### Live report-size matrix — 2026-11-06
+
+The local production frontend was exercised with real academic search, local MiniLM embeddings and live Groq generation for each selection count. Sources with available abstracts were preferred for the depth check, including educational, image-generation, tourism and nursing RAG papers. Each successful run completed all eight sections, retained every selected source, showed no browser JavaScript errors, contained no canned paragraphs or retrieved-excerpt replacements, and downloaded MD, plain TXT and PDF. These are observed samples rather than guaranteed word counts for every future input.
+
+| Selected papers | Report words (approximately) | PDF pages | Complete sections |
+| --- | ---: | ---: | ---: |
+| 2 | 1,689 | 5 | 8 |
+| 3 | 1,857 | 7 | 8 |
+| 4 | 2,016 | 6 | 8 |
+| 5 | 2,218 | 7 | 8 |
+
+The tests exposed real provider quota failures before successful retests. Recovery now honors seconds/milliseconds retry hints asynchronously for streamed reports, or in a worker for completion, within the same bounded attempt/deadline budget. An outage remains a visible partial report, never filler; an empty index fails instead of returning a placeholder report. Deterministic regressions check count-specific depth instructions, model-written expansion preserving findings, absence of stock report-body replacements, and nonblocking quota waits. Final verification passed 132 backend tests, Ruff and mypy, plus the full deterministic browser integration (search, mixed ingestion, report, follow-up, clearing, exports, runtime/proxy contracts and responsive layouts).
+
+Detailed-report verification increased the default report output budget to 6,000 tokens and removed the short-report prompt limits. A live five-source run produced approximately 1,700 words across five PDF pages with all eight sections and no static fallback paragraphs. MD/TXT/PDF downloads passed. The unchanged live Markdown was re-exported after pagination fixes; all five PDF pages were inspected for heading/table placement, guidance labels and nested citation links. Backend verification passed 126 tests, Ruff and mypy; frontend verification passed 22 tests, TypeScript, lint and production build. Actual length varies with available evidence and model output rather than being padded to a fixed word count.
 
 ```sh
 cd frontend

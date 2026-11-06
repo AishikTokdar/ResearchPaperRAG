@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -170,7 +170,7 @@ class GroundingTests(unittest.TestCase):
         other._cached_generate("system", "question", [doc], "model", "test", 100)
         other.llm.generate_text.assert_called_once()
 
-    def test_report_uses_one_generation_and_does_not_retry_formatting(self):
+    def test_report_completion_is_bounded_and_never_fills_with_placeholders(self):
         engine = GapAnalyzerEngine()
         engine.vector_store = object()
         engine._report_documents = MagicMock(
@@ -181,7 +181,8 @@ class GroundingTests(unittest.TestCase):
         engine.llm = MagicMock()
         engine.llm.generate_text.return_value = ("Insufficient evidence [E1]", "fake", [])
         report = engine.generate_gap_report("topic")
-        engine.llm.generate_text.assert_called_once()
+        self.assertEqual(engine.llm.generate_text.call_count, 3)
+        self.assertIn("> Partial report:", report)
         self.assertIn("abstracts only", report)
 
 
@@ -206,6 +207,57 @@ class ProviderTests(unittest.TestCase):
             attempts = list(self.service._attempts("m1"))
         self.assertEqual(len(attempts), 2)
         self.assertEqual([a[-1] for a in attempts], [1, 2])
+
+    def test_provider_alternative_precedes_second_key_on_shared_quota(self):
+        other = AI_PROVIDERS["groq"]
+        with patch.object(self.service, "_llm_attempt_sequence", return_value=[(self.provider, "m1"), (other, "m2")]), patch.object(self.service, "_resolve_llm_api_keys", return_value=["key1", "key2"]):
+            attempts = list(self.service._attempts("m1"))
+        self.assertEqual([attempt[0].name for attempt in attempts], [self.provider.name, other.name])
+        self.assertEqual(len(attempts), 2)
+
+    def test_report_quota_wait_honors_short_retry_after_within_attempt_budget(self):
+        error = RuntimeError("quota")
+        error.status_code = 429
+        error.response = SimpleNamespace(headers={"retry-after": "0.1"})
+        with patch.object(self.service, "_llm_attempt_sequence", return_value=[(self.provider, "m1")]), patch.object(self.service, "_resolve_llm_api_keys", return_value=["key1"]), patch("app.services.llm_service.time.sleep") as sleep:
+            attempts = self.service._attempts("m1", wait_for_quota=True)
+            first = next(attempts)
+            self.service._failure(self.provider, "m1", first[4], error)
+            second = next(attempts)
+            self.assertEqual(second[-1], 2)
+            sleep.assert_called_once()
+            self.assertLessEqual(sleep.call_args.args[0], 0.6)
+            with self.assertRaises(StopIteration):
+                next(attempts)
+
+    def test_report_quota_wait_accepts_explicit_provider_seconds_hint(self):
+        error = RuntimeError("Rate limit reached. Please try again in 11.16s.")
+        error.status_code = 429
+        error.response = SimpleNamespace(headers={})
+        with patch.object(self.service, "_llm_attempt_sequence", return_value=[(self.provider, "m1")]), patch.object(self.service, "_resolve_llm_api_keys", return_value=["key1"]), patch("app.services.llm_service.time.sleep") as sleep:
+            attempts = self.service._attempts("m1", wait_for_quota=True)
+            first = next(attempts)
+            self.service._failure(self.provider, "m1", first[4], error)
+            self.assertEqual(next(attempts)[-1], 2)
+            self.assertGreater(sleep.call_args.args[0], 11)
+            self.assertLess(sleep.call_args.args[0], 12)
+
+    def test_streaming_report_retries_millisecond_quota_hint_without_blocking(self):
+        error = RuntimeError("Please try again in 225ms.")
+        error.status_code = 429
+        error.response = SimpleNamespace(headers={})
+
+        async def run():
+            with patch.object(self.service, "_attempts", return_value=iter([(self.provider, "m1", "key", 20, "sig", 1)])), patch("app.services.llm_service.asyncio.sleep", new_callable=AsyncMock) as sleep:
+                attempts = self.service._stream_attempts("m1", "gap_report_stream")
+                first = await anext(attempts)
+                self.service._failure(self.provider, "m1", first[4], error)
+                second = await anext(attempts)
+                self.assertEqual(second[-1], 2)
+                sleep.assert_awaited_once()
+                self.assertLess(sleep.call_args.args[0], 0.8)
+                await attempts.aclose()
+        asyncio.run(run())
 
     def test_strict_system_role_and_output_cap(self):
         response = AIMessage(content="Measured result [E1]", response_metadata={})

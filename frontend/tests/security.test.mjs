@@ -140,6 +140,22 @@ test("report tables retain their separator and first proposed project", async ()
   assert.ok(html.includes("<td") && html.includes("First project") && html.includes("Second project"));
 });
 
+test("report table line breaks render safely and TXT exports plain spaces", async () => {
+  const report = "## 3. Common Methods\n| Method | Details |\n| --- | --- |\n| Retrieval | Dense search<br>Lexical search<BR />Fusion |";
+  const html = await renderer.renderMarkdownToHtmlString(report);
+  assert.ok(html.includes("<br/>") || html.includes("<br>"));
+  assert.ok(!html.includes("&lt;br"));
+  const text = renderer.reportToPlainText(report, "Methods");
+  assert.ok(text.includes("Dense search Lexical search Fusion"));
+  assert.ok(!text.includes("<br") && !text.includes("<BR"));
+});
+
+test("bold report passages keep nested citations as links instead of raw Markdown", async () => {
+  const html = await renderer.renderMarkdownToHtmlString("## 4. Limitations\n**Metadata-only papers [Source 1](https://example.org/paper)** need full-text review.");
+  assert.ok(html.includes('href="https://example.org/paper"'));
+  assert.ok(!html.includes("[Source 1](https://example.org/paper)"));
+});
+
 test("TXT export keeps all heading levels and table contents without Markdown decoration", () => {
   const report = "## 1. Literature Summary\n\n**Result** and *interpretation* with `EEG`.\n\n### Review details\n\n- Keep this finding [Source 1](https://example.org/paper_name).\n\n## 8. Novel Paper Suggestions\n\n| Proposed Title | Core Idea | Expected Outcome (hypothesis) |\n|---|---|---|\n| First project | Compare methods | May improve robustness |\n\n**General guidance (not findings from the selected papers)**\n\nReview external validity.\n\n## Sources\n\n- **Source 1:** [Full paper title](https://example.org/paper_name)";
   const text = renderer.reportToPlainText(report, "EEG evaluation");

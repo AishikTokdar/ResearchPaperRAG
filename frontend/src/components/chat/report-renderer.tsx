@@ -12,6 +12,7 @@ interface ReportRendererProps {
 function reportToPlainText(markdown: string, topic: string): string {
   const urls: string[] = [];
   const text = sanitizeReportMarkdown(markdown)
+    .replace(/<br\s*\/?>/gi, " ")
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label, url) => {
       urls.push(url);
       return `${label} (REPORTURL${urls.length - 1}TOKEN)`;
@@ -132,7 +133,7 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
 
     for (const heading of container.querySelectorAll("h2, h3")) {
       const first = heading.nextElementSibling;
-      if (!first?.matches("p")) continue;
+      if (!first?.matches("p, table, .overflow-x-auto")) continue;
       const next = first.nextElementSibling;
       const group = document.createElement("div");
       group.style.breakInside = "avoid";
@@ -140,6 +141,17 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
       heading.before(group);
       group.append(heading, first);
       if (first.querySelector("strong:only-child") && next?.matches("p")) group.append(next);
+    }
+
+    for (const label of container.querySelectorAll("p")) {
+      if (label.parentElement?.style.breakInside === "avoid") continue;
+      if (!label.matches("p:has(> strong:only-child)") || !label.nextElementSibling?.matches("p")) continue;
+      const next = label.nextElementSibling;
+      const group = document.createElement("div");
+      group.style.breakInside = "avoid";
+      group.style.pageBreakInside = "avoid";
+      label.before(group);
+      group.append(label, next);
     }
 
     const opt = {
@@ -658,7 +670,7 @@ function RichInlineText({ text }: { text: string }) {
   cleaned = cleaned.replace(/\s*\(\s*Chunk\s*\d+\s*\)/gi, "");
   cleaned = cleaned.replace(/\[\s*Chunk\s*\d+\s*\]/gi, "");
 
-  const TOKEN_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`|\[([^\]]+)\])/g;
+  const TOKEN_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`|\[([^\]]+)\]|(<br\s*\/?>))/gi;
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -672,7 +684,9 @@ function RichInlineText({ text }: { text: string }) {
     const full = m[0];
     const key = m.index;
 
-    if (m[3] !== undefined) {
+    if (m[8] !== undefined) {
+      parts.push(<br key={key} />);
+    } else if (m[3] !== undefined) {
       const rawText = m[2].replace(/[*_]/g, "").trim();
       const rawUrl = m[3].trim();
       const finalUrl = normalizeUrl(rawUrl);
@@ -704,13 +718,13 @@ function RichInlineText({ text }: { text: string }) {
     } else if (m[4] !== undefined) {
       parts.push(
         <strong key={key} className="font-semibold text-zinc-900 dark:text-zinc-100">
-          {m[4]}
+          <RichInlineText text={m[4]} />
         </strong>
       );
     } else if (m[5] !== undefined) {
       parts.push(
         <em key={key} className="italic text-zinc-700 dark:text-zinc-300">
-          {m[5]}
+          <RichInlineText text={m[5]} />
         </em>
       );
     } else if (m[6] !== undefined) {

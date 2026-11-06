@@ -1,8 +1,11 @@
-"""Readable report fallbacks and compact citations; no additional generation calls."""
+"""Report coverage, validated model guidance and compact citations."""
 
 import re
+import unicodedata
 
-from .evidence import OMITTED_PASSAGE
+from langchain_core.documents import Document
+
+from .evidence import OMITTED_PASSAGE, format_evidence, ground_answer
 
 GENERAL_GUIDANCE = "General guidance (not findings from the selected papers)"
 SECTIONS = (
@@ -27,7 +30,84 @@ GUIDANCE = (
 )
 
 
-def complete_report_sections(report: str) -> str:
+def section_bodies(report: str) -> dict[int, str]:
+    return {int(match[1]): match[2].strip() for match in re.finditer(
+        r"(?ms)^##\s+([1-8])\.\s+[^\n]*\n(.*?)(?=^##\s+[1-8]\.\s+|\Z)", report
+    )}
+
+
+def sections_needing_guidance(report: str) -> list[int]:
+    bodies = section_bodies(report)
+    return [number for number in range(1, 9) if not bodies.get(number)
+            or OMITTED_PASSAGE in bodies[number] or GUIDANCE[number - 1] in bodies[number]]
+
+
+def parse_model_guidance(response: str, requested: list[int]) -> dict[int, str]:
+    guidance = {}
+    for number, body in section_bodies(response).items():
+        if number not in requested:
+            continue
+        body = re.sub(r"^(?:\*\*)?(?:General guidance|Proposed research)(?:\*\*)?\s*:\s*(?:\*\*)?", "", body, flags=re.I)
+        body = " ".join(body.split()).strip()
+        if re.search(r"\b(?:papers?|stud(?:y|ies)|authors?|surveys?|results?)\s+(?:reports?|claims?|shows?|found|achieves?|outperforms?|concludes?)\b", body, re.I):
+            continue
+        # Sequential list labels and model identifiers are not result metrics.
+        # Keep the original prose for display; relax only these explicit forms
+        # when validating qualitative advice (not factual paper findings).
+        numeric_text = re.sub(r"\b(?:ChatGPT|GPT|Llama|Gemma|Qwen|Gemini)[\s_\-\u2010-\u2015]*\d+(?:\.\d+)*\b", "model", body, flags=re.I)
+        markers = list(dict.fromkeys(int(value) for value in re.findall(r"\((\d+)\)(?=\s)", numeric_text)))
+        if len(markers) >= 2 and markers == list(range(1, len(markers) + 1)):
+            numeric_text = re.sub(r"\(\d+\)(?=\s)", "", numeric_text)
+        candidate = f"General guidance: {numeric_text}"
+        if body and ground_answer(candidate, {}, [], allow_general_guidance=True) == candidate:
+            guidance[number] = body
+    return guidance
+
+
+def _normalized_title(value: str) -> str:
+    return re.sub(r"[\W_]+", "", unicodedata.normalize("NFKC", value).casefold())
+
+
+def ensure_source_summaries(report: str, documents: list[Document]) -> str:
+    """Never silently lose a selection when a model omits/rejects its summary.
+
+    An explicitly quoted retrieved passage is a source extract, not an invented
+    model summary. Metadata-only selections retain an honest coverage note.
+    """
+    summary = section_bodies(report).get(1, "")
+    selected_titles = {_normalized_title(str(doc.metadata.get("paper_title") or doc.metadata.get("source_file") or "Selected paper")) for doc in documents}
+    # A paper cited in a bibliography is not an additional selected source.
+    entries = list(re.finditer(r"(?m)^(?:[-*•]\s+)?\*\*([^*\n]{20,})\*\*\s*[—–-]\s*", summary))
+    if entries:
+        kept = [summary[:entries[0].start()]]
+        for index, entry in enumerate(entries):
+            end = entries[index + 1].start() if index + 1 < len(entries) else len(summary)
+            if _normalized_title(entry[1]) in selected_titles:
+                kept.append(summary[entry.start():end])
+        summary = "\n\n".join(part.strip() for part in kept if part.strip())
+    additions = []
+    for doc in documents:
+        citation = format_evidence([doc])[1]["E1"]
+        if citation in summary or (doc.metadata.get("source") and str(doc.metadata["source"]) in summary):
+            continue
+        title = str(doc.metadata.get("paper_title") or doc.metadata.get("source_file") or "Selected paper")
+        title = re.sub(r"[\[\]<>\n\r*]", " ", title)
+        if doc.metadata.get("evidence_scope") == "metadata_only":
+            text = "Bibliographic record retrieved; experimental findings cannot be verified from this record."
+        else:
+            excerpt = " ".join(doc.page_content.split())
+            excerpt = " ".join(excerpt.split()[:90])
+            text = f'Retrieved excerpt: “{excerpt}…”'
+        additions.append(f"- **{title}** — {text} {citation}")
+    if not additions and summary == section_bodies(report).get(1, ""):
+        return report
+    replacement = "## 1. Literature Summary\n\n" + "\n\n".join(filter(None, [summary, *additions])) + "\n\n"
+    if re.search(r"(?m)^##\s+1\.\s+", report):
+        return re.sub(r"(?ms)^##\s+1\.\s+[^\n]*\n.*?(?=^##\s+[2-8]\.\s+|\Z)", lambda _: replacement, report, count=1)
+    return replacement + report
+
+
+def complete_report_sections(report: str, guidance: dict[int, str] | None = None, *, allow_static_fallback: bool = True) -> str:
     matches = list(re.finditer(r"(?m)^##\s+([1-8])\.\s+[^\n]*", report))
     bodies: dict[int, list[str]] = {}
     preamble = report[: matches[0].start()].strip() if matches else ""
@@ -47,6 +127,14 @@ def complete_report_sections(report: str) -> str:
         )
         rejected = OMITTED_PASSAGE in body
         body = "\n".join(line for line in body.splitlines() if OMITTED_PASSAGE not in line).strip()
+        body = re.sub(r"(?m)^\|[^\n]*\|[ \t]*\n\|[ :|\-]+\|[ \t]*(?:\n(?![ \t]*\|)|\Z)", "", body).strip()
+        if rejected and body.endswith(":"):
+            paragraphs = body.split("\n\n")
+            if not re.search(r"\[[^\]]+\]", paragraphs[-1]):
+                body = "\n\n".join(paragraphs[:-1]).strip()
+        if guidance and number in guidance and GUIDANCE[number - 1] in body:
+            body = body.replace(GUIDANCE[number - 1], "").strip()
+            rejected = True
         if (
             rejected
             or not body
@@ -54,7 +142,12 @@ def complete_report_sections(report: str) -> str:
                 r"(?:Insufficient evidence|Not (?:provided|available))[^\n]*", body, re.I
             )
         ):
-            advice = f"**{GENERAL_GUIDANCE}**\n\n{GUIDANCE[number - 1]}"
+            if not allow_static_fallback and number not in (guidance or {}):
+                if body and not re.fullmatch(r"(?:Insufficient evidence|Not (?:provided|available))[^\n]*", body, re.I):
+                    sections.append(f"## {number}. {title}\n\n{body}")
+                continue
+            text = (guidance or {}).get(number, GUIDANCE[number - 1])
+            advice = text if GENERAL_GUIDANCE in body else f"**{GENERAL_GUIDANCE}**\n\n{text}"
             body = (
                 f"{body}\n\n{advice}"
                 if body

@@ -166,7 +166,7 @@ class CachingAndConversationTests(unittest.TestCase):
             )
             for _ in range(2):
                 engine._cached_generate("system", "question", docs, "model", "gap_report", 100)
-            self.assertEqual(engine.llm.generate_text.call_count, 2)
+            self.assertEqual(engine.llm.generate_text.call_count, 6 if not warnings else 2)
 
     def test_changed_evidence_or_generation_settings_invalidate_answers(self):
         engine = GapAnalyzerEngine()

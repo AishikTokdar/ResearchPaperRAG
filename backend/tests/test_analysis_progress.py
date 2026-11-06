@@ -87,9 +87,9 @@ class ReportProgressTests(unittest.TestCase):
                 async for event in engine.stream_gap_report("topic", "gemini", "gemini-3.8-flash")
             ]
 
-        events = asyncio.run(collect())
+        with self.assertRaisesRegex(ValueError, "No source content"):
+            asyncio.run(collect())
         engine.llm.stream_text.assert_not_called()
-        self.assertIn("Insufficient evidence", events[-1]["report"])
 
     def test_uploaded_passages_are_indexed_in_same_research_engine(self):
         engine = GapAnalyzerEngine()

@@ -9,7 +9,6 @@ export * from "./button";
 export * from "./badge";
 export * from "./glass-card";
 export * from "./input";
-export * from "./textarea";
 export * from "./spinner";
 export * from "./dropdown-menu";
 export * from "./tooltip";

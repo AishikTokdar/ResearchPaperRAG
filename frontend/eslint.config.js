@@ -37,7 +37,6 @@ export default [
             "glassCardInnerVariants",
             "useChatContext",
             "AI_MODELS",
-            "TypingIndicator",
             "useTheme",
             "useHealth",
             "sanitizeReportMarkdown",

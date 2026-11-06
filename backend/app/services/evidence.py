@@ -107,7 +107,7 @@ OMITTED_PASSAGE = "Insufficient evidence to verify this passage"
 def _normalize_citations(answer: str) -> str:
     answer = answer.replace("【", "[").replace("】", "]")
     return re.sub(
-        r"\[(E\d+(?:\s*[,;]\s*E\d+)*)\]|\(E(\d+)\)",
+        r"\[(E\d+(?:\s*[,;/]\s*E\d+)*)\]|\((E\d+(?:\s*[,;/]\s*E\d+)*)\)",
         lambda m: " ".join(f"[{ref.upper()}]" for ref in re.findall(r"E\d+", m[0], re.I)),
         answer,
         flags=re.I,
@@ -203,7 +203,7 @@ def ground_answer(
                 prose,
                 re.I,
             )
-            proposal = re.match(
+            proposal = allow_proposals and re.match(
                 r"^(?:[-*•]\s*)?(?:Proposed (?:project|research|hypothesis)|Hypothesis|Suggestion)\s*:",
                 prose,
                 re.I,
@@ -216,6 +216,7 @@ def ground_answer(
                     "hypothesis" in h.casefold() and "proposed" in h.casefold()
                     for h in table_headers
                 )
+                and not _numbers(prose)
             )
             general_guidance = (
                 allow_general_guidance

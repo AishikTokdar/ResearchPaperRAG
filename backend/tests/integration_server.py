@@ -54,7 +54,14 @@ class FixtureLLM:
     def answer(self, messages):
         from app.services.gap_analyzer_engine import REPORT_SECTIONS
 
-        evidence = json.loads(messages[-1].content)["untrusted_evidence"]
+        payload = json.loads(messages[-1].content)
+        evidence = payload["untrusted_evidence"]
+        if not evidence and "requested research-analysis sections" in messages[0].content:
+            request = json.loads(payload["question"])
+            return "\n\n".join(
+                heading + "\nEvaluate retrieval coverage through held-out queries, inspect errors and compare validation protocols before interpreting educational outcomes."
+                for heading in request["sections"]
+            )
         assert "91%" in evidence, "Integration fixture lost source evidence"
         if "Literature Summary" in messages[0].content:
             return "\n\n".join(

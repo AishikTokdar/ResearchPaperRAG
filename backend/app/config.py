@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 200
     retrieval_k: int = 4
     context_token_budget: int = Field(default=4000, ge=512, le=16000)
-    report_max_tokens: int = Field(default=3500, ge=512, le=8192)
+    report_max_tokens: int = Field(default=6000, ge=512, le=8192)
     followup_max_tokens: int = Field(default=800, ge=128, le=4096)
     llm_max_attempts: int = Field(default=3, ge=1, le=6)
     llm_timeout_seconds: float = Field(default=45, ge=1, le=120)
