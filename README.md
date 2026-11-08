@@ -15,57 +15,7 @@ ResearchPaperRAG combines federated academic search across six registries with l
 
 ## Architecture Overview
 
-```mermaid
-flowchart TD
-    subgraph Frontend["Frontend (React 18 + Vite + Tailwind + Framer Motion)"]
-        UI["Workspace UI (Home, Chat, Status)"]
-        SSE["SSE Event Stream Consumer"]
-        Export["PDF / MD / TXT Export"]
-    end
-
-    subgraph Gateway["Edge & Gateway"]
-        Nginx["Nginx Reverse Proxy / Same-Origin"]
-        Session["X-Chat-Session-Id Capability Guard"]
-    end
-
-    subgraph Backend["FastAPI Backend (Single Worker)"]
-        Router["FastAPI Application & Routes"]
-        SearchSvc["Paper Fetcher (arXiv, Crossref, PubMed, DOAJ, OpenAlex, S2)"]
-        PDFProc["Isolated PDF Subprocess Parser"]
-        
-        subgraph RAG["Retrieval Engine"]
-            Chunker["MiniLM Word-Piece Chunker (224 tokens + 32 overlap)"]
-            Embeddings["Local CPU MiniLM Embeddings (all-MiniLM-L6-v2)"]
-            FAISS["Dense FAISS Index (JSON Docstore + Checksum)"]
-            BM25["Lexical BM25 Index"]
-            Fusion["Reciprocal Rank Fusion"]
-        end
-        
-        subgraph Synthesis["Multi-Facet Generator & Guardrails"]
-            Facets["3-Facet Ingestion (Methods, Results, Limitations)"]
-            LLM["LLM Service (Gemini, Groq, SambaNova, OpenRouter)"]
-            Grounding["Provenance Citation & Numerical Validator"]
-        end
-    end
-
-    UI --> Gateway
-    Gateway --> Router
-    Router --> SearchSvc
-    Router --> PDFProc
-    PDFProc --> Chunker
-    SearchSvc --> Chunker
-    Chunker --> Embeddings
-    Embeddings --> FAISS
-    Chunker --> BM25
-    FAISS --> Fusion
-    BM25 --> Fusion
-    Fusion --> Facets
-    Facets --> LLM
-    LLM --> Grounding
-    Grounding --> SSE
-    SSE --> UI
-    UI --> Export
-```
+![ResearchPaperRAG Architecture](assets/architecture.png)
 
 ---
 
