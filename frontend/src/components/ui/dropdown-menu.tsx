@@ -1,7 +1,3 @@
-/**
- * Radix Dropdown Menu — shadcn-style primitives for nav menus.
- */
-
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils";

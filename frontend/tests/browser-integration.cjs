@@ -1,6 +1,3 @@
-/* Real frontend -> proxy -> FastAPI integration; start the fixture server first.
- * See docs/TESTING.md. External inference and downloads are deterministic fixtures.
- */
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 

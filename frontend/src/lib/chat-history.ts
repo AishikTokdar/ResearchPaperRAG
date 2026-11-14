@@ -1,10 +1,3 @@
-/**
- * Chat history helpers — shared by useChat and ChatContext.
- *
- * Assigns stable ids for React keys and IndexedDB round-trips; legacy sessions
- * without id still render via getChatEntryReactKey fallbacks.
- */
-
 import type { ChatEntry } from "@/types";
 
 function newChatEntryId(): string {

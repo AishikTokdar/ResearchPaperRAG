@@ -36,5 +36,5 @@ export function getChatApiSessionId(): string {
 
 export function resetChatApiSessionId(): void {
   volatileSessionId = newSessionUuid();
-  try { localStorage.setItem(STORAGE_KEY, volatileSessionId); } catch { /* In-memory session remains usable. */ }
+  try { localStorage.setItem(STORAGE_KEY, volatileSessionId); } catch {}
 }

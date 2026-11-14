@@ -1,4 +1,3 @@
-# Stage 1: Build React SPA
 FROM node:24-alpine AS builder
 
 WORKDIR /app

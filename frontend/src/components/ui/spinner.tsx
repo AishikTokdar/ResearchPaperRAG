@@ -1,13 +1,3 @@
-/**
- * Spinner Component
- * 
- * A loading spinner with multiple size and color options.
- * 
- * Usage:
- * <Spinner />
- * <Spinner size="lg" color="purple" />
- */
-
 import * as React from "react";
 import { cn } from "@/lib/utils";
 

@@ -169,8 +169,6 @@ knowledge to a paper or attach evidence citations to unsupported background clai
             if keys:
                 primary.append((provider, model_id, keys[0]))
                 extra_keys.extend((provider, model_id, key) for key in keys[1:])
-        # Provider/model alternatives precede extra keys, which may share the
-        # same organization-level quota. Keep one total attempt/deadline budget.
         for provider, model_id, key in primary + extra_keys:
             signature = hashlib.sha256(f"{provider.name}:{key}".encode()).hexdigest()
             for _ in range(self.settings.llm_max_attempts if wait_for_quota else 1):
@@ -182,8 +180,6 @@ knowledge to a paper or attach evidence citations to unsupported background clai
                 if delay > 0:
                     if not wait_for_quota or delay > 30 or delay >= remaining:
                         break
-                    # Report completion runs in a bounded worker, not the SSE
-                    # event loop. Honor a short provider Retry-After once.
                     time.sleep(delay)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -251,7 +247,7 @@ knowledge to a paper or attach evidence citations to unsupported background clai
     ) -> tuple[str, str, list[str]]:
         messages = self._messages(system, question, evidence)
         for provider, model_id, key, timeout, signature, attempt in self._attempts(
-            model, wait_for_quota=feature in {"gap_report", "report_guidance"}
+            model, wait_for_quota=feature in {"gap_report", "gap_report_batch", "report_guidance", "report_section_repair"}
         ):
             try:
                 llm = self._build_llm_with_key(provider, model_id, key, max_tokens, timeout)

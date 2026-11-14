@@ -37,6 +37,13 @@ class GroundingTests(unittest.TestCase):
             "cannot", self.check("1. Accuracy was 91% on 1000 samples at 1e-3 seconds [E1].")
         )
 
+    def test_inline_pipeline_labels_are_not_result_numbers(self):
+        answer = "The pipeline consists of (1) retrieval, (2) generation, and (3) evaluation at 91% accuracy [E1]."
+        self.assertNotIn("cannot", self.check(answer))
+        self.assertIn("numerical claim", self.check(answer.replace("91%", "99%")))
+        self.assertIn("numerical claim", self.check("The sample had (1) participants and (2) samples [E1]."))
+        self.assertIn("numerical claim", self.check("The pipeline includes (1) retrieval and (3) generation [E1]."))
+
     def test_compound_citations_keep_all_references(self):
         for refs in ("[E1, E2]", "[E1; E2]", "【E1; E2】", "[e1; e2]"):
             self.assertNotIn("cannot", self.check(f"Accuracy was 91% versus 80% {refs}."))

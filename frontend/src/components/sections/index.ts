@@ -1,7 +1,3 @@
-/**
- * Sections Barrel Export
- */
-
 export * from "./hero-section";
 export * from "./features-section";
 export * from "./how-it-works";

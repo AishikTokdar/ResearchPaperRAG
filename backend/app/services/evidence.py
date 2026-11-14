@@ -234,6 +234,11 @@ def ground_answer(
         elif documents is not None:
             claim = re.sub(r"\[E\d+\]", "", prose)
             claim = re.sub(r"(?m)^\s*(?:[-*•]\s+)?(?:\d+[.)]\s+|\(\d+\)\s+)", "", claim)
+            ordinals = list(re.finditer(r"\((\d+)\)(?=\s)", claim))
+            if len(ordinals) >= 2 and [int(m[1]) for m in ordinals] == list(range(1, len(ordinals) + 1)):
+                prefix = claim[:ordinals[0].start()].rstrip()
+                if prefix.endswith(":") or re.search(r"\b(?:consists\s+of|includes?|(?:steps?|stages?|components?)\s+are)$", prefix, re.I):
+                    claim = re.sub(r"\(\d+\)(?=\s)", "", claim)
             source = " ".join(evidence.get(ref, "") for ref in refs)
             if _numbers(claim) - _numbers(source):
                 reason = "a numerical claim is absent from its cited evidence"

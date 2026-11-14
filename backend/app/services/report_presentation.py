@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 
 from .evidence import OMITTED_PASSAGE, format_evidence, ground_answer
 
-GENERAL_GUIDANCE = "General guidance (not findings from the selected papers)"
+GENERAL_GUIDANCE = "General guidance"
 SECTIONS = (
     "Literature Summary",
     "Trend Detection",
@@ -32,8 +32,79 @@ GUIDANCE = (
 
 def section_bodies(report: str) -> dict[int, str]:
     return {int(match[1]): match[2].strip() for match in re.finditer(
-        r"(?ms)^##\s+([1-8])\.\s+[^\n]*\n(.*?)(?=^##\s+[1-8]\.\s+|\Z)", report
+        r"(?ms)^##\s+([1-8])\.\s+[^\n]*\n(.*?)(?=^##\s+|\Z)", report
     )}
+
+
+def concise_guidance(report: str) -> str:
+    report = re.sub(r"General guidance\s*\(not findings from the selected papers\)", GENERAL_GUIDANCE, report, flags=re.I)
+    report = re.sub(r"(?im)^(?:\*\*)?General guidance[ \t]*:?(?:\*\*)?[ \t]*:?[ \t]*\n?",
+                    f"**{GENERAL_GUIDANCE}**\n", report)
+    pattern = r"(?ms)^(?:\*\*)?General guidance(?:\*\*)?\s*(?::|\n)\s*(.*?)(?=\n\s*\n|^##|\Z)"
+    def shorten(match: re.Match) -> str:
+        sentences = re.split(r"(?<=[.!?])\s+", match[1].strip())
+        kept: list[str] = []
+        for sentence in sentences[:2]:
+            if len(" ".join([*kept, sentence]).split()) > 60:
+                break
+            kept.append(sentence)
+        return f"**{GENERAL_GUIDANCE}**\n\n" + " ".join(kept) if kept else ""
+    return re.sub(pattern, shorten, report)
+
+
+def covered_papers(body: str, docs: list[Document]) -> set[str]:
+    covered = set()
+    for doc in docs:
+        metadata = doc.metadata
+        key = str(metadata.get("paper_id") or metadata.get("source") or metadata.get("source_file") or metadata.get("paper_title") or "document")
+        title = str(metadata.get("paper_title") or metadata.get("source_file") or "")
+        url = str(metadata.get("source") or "")
+        if (url and url in body) or (title and _normalized_title(title) in _normalized_title(body)):
+            covered.add(key)
+    return covered
+
+
+def thin_paper_analysis(body: str, docs: list[Document], minimum_words: int = 40) -> bool:
+    """Detect token mentions replacing analysis of substantive source evidence."""
+    for doc in docs:
+        if doc.metadata.get("evidence_scope") == "metadata_only":
+            continue
+        paragraphs = [part for part in re.split(r"\n\s*\n", body)
+                      if covered_papers(part, [doc])]
+        words = sum(len(re.sub(r"\[[^\]]*\](?:\([^)]*\))?", "", re.sub(
+                        r"^\s*(?:[-*]\s+)?\*\*[^*]+\*\*\s*[–—:-]?", "", part)).split())
+                    / max(1, len(covered_papers(part, docs))) for part in paragraphs)
+        if words < minimum_words:
+            return True
+    return False
+
+
+def reject_speculative_methods(report: str, docs: list[Document] | None = None) -> str:
+    """A guess about authors' methods/limitations is not a cited finding."""
+    for number, body in section_bodies(report).items():
+        if number not in (3, 4):
+            continue
+        paragraphs = re.split(r"\n\s*\n", body)
+        for index, paragraph in enumerate(paragraphs):
+            metadata_method = number == 3 and any(
+                doc.metadata.get("evidence_scope") == "metadata_only" and covered_papers(paragraph, [doc])
+                for doc in docs or []
+            )
+            prose = re.sub(r"^\s*(?:[-*]\s+)?\*\*[^*]+\*\*\s*[–—:-]?", "", paragraph)
+            prose = re.sub(r"\[[^\]]*\](?:\([^)]*\))?", "", prose)
+            method_claim = re.search(r"\b(?:retriev\w*|generat\w*|architect\w*|pipeline|model\w*|method\w*|embed\w*|vector|index\w*|train\w*|corpus|corpora)\b", prose, re.I)
+            explicit_boundary = re.search(
+                r"\b(?:no|not(?!\s+only\b)|cannot|without|lack\w*|missing|unavailable|undisclosed|unknown|unspecified|unreported|indeterminate|absent|omitted)\b|\b(?:doesn|isn|aren)['’]t\b",
+                prose, re.I,
+            )
+            if (metadata_method and method_claim and not explicit_boundary) or re.search(r"\b(?:(?:study|paper|authors?|framework)\s+(?:likely|probably|possibly|may|might)\s+(?:use|employ|adopt|acknowledge|note)\w*|(?:title|metadata|validation)\b[^.!?\n]{0,100}\b(?:impli|suggest)\w*)", paragraph, re.I):
+                paragraphs[index] = f"{OMITTED_PASSAGE} (speculative attribution of methods or limitations)."
+        replacement = "\n\n".join(paragraphs)
+        def replace_section(match: re.Match, content: str = replacement) -> str:
+            return match[1] + content + "\n\n"
+        report = re.sub(rf"(?ms)(^##\s+{number}\.\s+[^\n]*\n).*?(?=^##\s+|\Z)",
+                        replace_section, report, count=1)
+    return report
 
 
 def sections_needing_guidance(report: str) -> list[int]:
@@ -51,9 +122,6 @@ def parse_model_guidance(response: str, requested: list[int]) -> dict[int, str]:
         body = " ".join(body.split()).strip()
         if re.search(r"\b(?:papers?|stud(?:y|ies)|authors?|surveys?|results?)\s+(?:reports?|claims?|shows?|found|achieves?|outperforms?|concludes?)\b", body, re.I):
             continue
-        # Sequential list labels and model identifiers are not result metrics.
-        # Keep the original prose for display; relax only these explicit forms
-        # when validating qualitative advice (not factual paper findings).
         numeric_text = re.sub(r"\b(?:ChatGPT|GPT|Llama|Gemma|Qwen|Gemini)[\s_\-\u2010-\u2015]*\d+(?:\.\d+)*\b", "model", body, flags=re.I)
         markers = list(dict.fromkeys(int(value) for value in re.findall(r"\((\d+)\)(?=\s)", numeric_text)))
         if len(markers) >= 2 and markers == list(range(1, len(markers) + 1)):
@@ -76,7 +144,6 @@ def ensure_source_summaries(report: str, documents: list[Document]) -> str:
     """
     summary = section_bodies(report).get(1, "")
     selected_titles = {_normalized_title(str(doc.metadata.get("paper_title") or doc.metadata.get("source_file") or "Selected paper")) for doc in documents}
-    # A paper cited in a bibliography is not an additional selected source.
     entries = list(re.finditer(r"(?m)^(?:[-*•]\s+)?\*\*([^*\n]{20,})\*\*\s*[—–-]\s*", summary))
     if entries:
         kept = [summary[:entries[0].start()]]
@@ -108,6 +175,7 @@ def ensure_source_summaries(report: str, documents: list[Document]) -> str:
 
 
 def complete_report_sections(report: str, guidance: dict[int, str] | None = None, *, allow_static_fallback: bool = True) -> str:
+    report = concise_guidance(report)
     matches = list(re.finditer(r"(?m)^##\s+([1-8])\.\s+[^\n]*", report))
     bodies: dict[int, list[str]] = {}
     preamble = report[: matches[0].start()].strip() if matches else ""
@@ -162,6 +230,15 @@ def complete_report_sections(report: str, guidance: dict[int, str] | None = None
 
 def compact_report_citations(report: str) -> str:
     sources: dict[str, tuple[int, str]] = {}
+    unlinked_sources: list[str] = []
+    appendices = list(re.finditer(r"(?ms)^##\s+(?:Selected sources|Sources)\s*\n(.*?)(?=^##\s+|\Z)", report))
+    for appendix in appendices:
+        for entry in re.finditer(r"\*\*Source (\d+):\*\*\s*\[([^\]]+)\]\((https?://[^\s)]+)\)", appendix[1]):
+            sources.setdefault(entry[3], (int(entry[1]), entry[2]))
+        for entry in re.finditer(r"(?m)^-\s+(\[[^\]\n]+\])(?!\()\s*$", appendix[1]):
+            if entry[1] not in unlinked_sources:
+                unlinked_sources.append(entry[1])
+    report = re.sub(r"(?ms)^##\s+(?:Selected sources|Sources)\s*\n.*?(?=^##\s+|\Z)", "", report).rstrip()
 
     def replace(match: re.Match) -> str:
         label, url = match[1], match[2]
@@ -170,17 +247,21 @@ def compact_report_citations(report: str) -> str:
         page = re.search(r" - Page (\d+)$", label)
         title = label[: page.start()] if page else label
         if url not in sources:
-            sources[url] = (len(sources) + 1, title)
+            sources[url] = (max((entry[0] for entry in sources.values()), default=0) + 1, title)
         number = sources[url][0]
         location = f", p. {page[1]}" if page else ""
         return f"[Source {number}{location}]({url})"
 
     report = re.sub(r"\[([^\]\n]+)\]\((https?://[^\s)]+)\)", replace, report)
+    for appendix in appendices:
+        for entry in re.finditer(r"\[([^\]\n]+)\]\((https?://[^\s)]+)\)", appendix[1]):
+            replace(entry)
     report = re.sub(r"(\[[^\]]+\]\([^)]+\))(?:\s*\1)+", r"\1", report)
     report = re.sub(r"(\]\([^)]+\))(?=\[)", r"\1 ", report)
-    if sources:
-        references = "\n".join(
-            f"- **Source {number}:** [{title}]({url})" for url, (number, title) in sources.items()
-        )
+    if sources or unlinked_sources:
+        references = "\n".join([
+            *(f"- **Source {number}:** [{title}]({url})" for url, (number, title) in sources.items()),
+            *(f"- {title}" for title in unlinked_sources),
+        ])
         report += "\n\n## Sources\n\n" + references
     return report

@@ -251,6 +251,7 @@ export function ReportRenderer({ report: rawReport, topic }: ReportRendererProps
 
 export function sanitizeReportMarkdown(raw: string): string {
   if (!raw) return "";
+  raw = raw.replace(/General guidance\s*\(not findings from the selected papers\)/gi, "General guidance");
 
   let cleaned = stripProcessingNotices(raw);
 

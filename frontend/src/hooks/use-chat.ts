@@ -1,17 +1,3 @@
-/**
- * useChat Hook
- *
- * Custom hook for managing chat state and operations.
- * Supports both standard JSON and SSE streaming responses.
- *
- * Usage:
- * const { chatHistory, isLoading, sendMessage, clearHistory } = useChat();
- *
- * Implementation note: ``sendMessageStreaming`` owns an ``AbortController`` in
- * ``abortRef`` so the UI can cancel in-flight SSE when the user navigates away
- * or hits Stop.
- */
-
 import * as React from "react";
 import { api, ApiError, streamQuestion } from "@/lib/api";
 import { createChatEntry } from "@/lib/chat-history";

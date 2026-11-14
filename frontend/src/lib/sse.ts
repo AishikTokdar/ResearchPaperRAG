@@ -1,4 +1,3 @@
-/** Incremental SSE framing, including split CRLF and final unterminated frames. */
 export async function* readServerEvents(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   const decoder = new TextDecoder();

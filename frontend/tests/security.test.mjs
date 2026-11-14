@@ -163,6 +163,7 @@ test("TXT export keeps all heading levels and table contents without Markdown de
   assert.ok(!/##|\*\*|`|\|---|={3,}|\[Source/.test(text));
   assert.ok(!text.includes("|"));
   assert.ok(text.includes("Proposed Title    Core Idea    Expected Outcome"));
+  assert.ok(!text.includes("not findings from the selected papers"));
 });
 
 test("citation clusters are deduplicated and guidance stays outside bullet lists", async () => {

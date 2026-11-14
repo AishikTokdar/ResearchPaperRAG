@@ -57,7 +57,6 @@
     transition: background-color 0.25s ease, color 0.25s ease;
   }
 
-  /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -90,7 +89,6 @@
 }
 
 @layer components {
-  /* Minimal card */
   .glass-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -112,7 +110,6 @@
     box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.08);
   }
 
-  /* Typography helpers */
   .heading-1 {
     font-size: 2.5rem;
     line-height: 1.15;
@@ -145,10 +142,8 @@
     color: var(--text-muted);
   }
 
-  /* Plain emphasis for report headings */
   .gradient-text { color: var(--text-main); }
 
-  /* Blinking cursor for SSE streaming */
   .typing-indicator {
     display: inline-block;
     width: 8px;
@@ -242,7 +237,6 @@
   .skip-link:focus { transform: translateY(0); }
 }
 @layer utilities {
-  /* Secondary copy must remain readable on both paper and inset surfaces. */
   .app-shell :is(.text-zinc-400, .text-zinc-500) { color: var(--text-muted); }
   html.dark .app-shell .text-zinc-500 { color: #a1a1aa; }
 }
@@ -252,5 +246,4 @@
   .workspace-report .report-section p { font-size: 0.9375rem; line-height: 1.85; }
 }
 
-/* Sonner supplies unlayered styles, so its target-size override must also be unlayered. */
 [data-sonner-toaster] [data-sonner-toast] [data-close-button] { width: 32px; height: 32px; }
