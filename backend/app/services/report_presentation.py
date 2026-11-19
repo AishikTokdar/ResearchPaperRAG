@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from functools import lru_cache
 
 from langchain_core.documents import Document
 
@@ -30,10 +31,26 @@ GUIDANCE = (
 )
 
 
+_SECTION_BODIES_RE = re.compile(r"(?ms)^##\s+([1-8])\.\s+[^\n]*\n(.*?)(?=^##\s+|\Z)")
+_TITLE_PREFIX_RE = re.compile(r"^\s*(?:[-*]\s+)?\*\*[^*]+\*\*\s*[–—:-]?")
+_CITATION_STRIP_RE = re.compile(r"\[[^\]]*\](?:\([^)]*\))?")
+_METHOD_CLAIM_RE = re.compile(
+    r"\b(?:retriev\w*|generat\w*|architect\w*|pipeline|model\w*|method\w*|embed\w*|vector|index\w*|train\w*|corpus|corpora)\b",
+    re.I,
+)
+_EXPLICIT_BOUNDARY_RE = re.compile(
+    r"\b(?:no|not(?!\s+only\b)|cannot|without|lack\w*|missing|unavailable|undisclosed|unknown|unspecified|unreported|indeterminate|absent|omitted)\b|\b(?:doesn|isn|aren)['’]t\b",
+    re.I,
+)
+_SPECULATIVE_RE = re.compile(
+    r"\b(?:(?:study|paper|authors?|framework)\s+(?:likely|probably|possibly|may|might)\s+(?:use|employ|adopt|acknowledge|note)\w*|(?:title|metadata|validation)\b[^.!?\n]{0,100}\b(?:impli|suggest)\w*)",
+    re.I,
+)
+_PARA_SPLIT_RE = re.compile(r"\n\s*\n")
+
+
 def section_bodies(report: str) -> dict[int, str]:
-    return {int(match[1]): match[2].strip() for match in re.finditer(
-        r"(?ms)^##\s+([1-8])\.\s+[^\n]*\n(.*?)(?=^##\s+|\Z)", report
-    )}
+    return {int(match[1]): match[2].strip() for match in _SECTION_BODIES_RE.finditer(report)}
 
 
 def concise_guidance(report: str) -> str:
@@ -52,15 +69,30 @@ def concise_guidance(report: str) -> str:
     return re.sub(pattern, shorten, report)
 
 
+_NON_WORD_PATTERN = re.compile(r"[\W_]+")
+
+
+@lru_cache(maxsize=512)
+def _normalized_title(value: str) -> str:
+    return _NON_WORD_PATTERN.sub("", unicodedata.normalize("NFKC", value).casefold())
+
+
 def covered_papers(body: str, docs: list[Document]) -> set[str]:
     covered = set()
+    norm_body = None
     for doc in docs:
         metadata = doc.metadata
         key = str(metadata.get("paper_id") or metadata.get("source") or metadata.get("source_file") or metadata.get("paper_title") or "document")
-        title = str(metadata.get("paper_title") or metadata.get("source_file") or "")
         url = str(metadata.get("source") or "")
-        if (url and url in body) or (title and _normalized_title(title) in _normalized_title(body)):
+        if url and url in body:
             covered.add(key)
+            continue
+        title = str(metadata.get("paper_title") or metadata.get("source_file") or "")
+        if title:
+            if norm_body is None:
+                norm_body = _normalized_title(body)
+            if _normalized_title(title) in norm_body:
+                covered.add(key)
     return covered
 
 
@@ -69,10 +101,9 @@ def thin_paper_analysis(body: str, docs: list[Document], minimum_words: int = 40
     for doc in docs:
         if doc.metadata.get("evidence_scope") == "metadata_only":
             continue
-        paragraphs = [part for part in re.split(r"\n\s*\n", body)
+        paragraphs = [part for part in _PARA_SPLIT_RE.split(body)
                       if covered_papers(part, [doc])]
-        words = sum(len(re.sub(r"\[[^\]]*\](?:\([^)]*\))?", "", re.sub(
-                        r"^\s*(?:[-*]\s+)?\*\*[^*]+\*\*\s*[–—:-]?", "", part)).split())
+        words = sum(len(_CITATION_STRIP_RE.sub("", _TITLE_PREFIX_RE.sub("", part)).split())
                     / max(1, len(covered_papers(part, docs))) for part in paragraphs)
         if words < minimum_words:
             return True
@@ -84,20 +115,17 @@ def reject_speculative_methods(report: str, docs: list[Document] | None = None) 
     for number, body in section_bodies(report).items():
         if number not in (3, 4):
             continue
-        paragraphs = re.split(r"\n\s*\n", body)
+        paragraphs = _PARA_SPLIT_RE.split(body)
         for index, paragraph in enumerate(paragraphs):
             metadata_method = number == 3 and any(
                 doc.metadata.get("evidence_scope") == "metadata_only" and covered_papers(paragraph, [doc])
                 for doc in docs or []
             )
-            prose = re.sub(r"^\s*(?:[-*]\s+)?\*\*[^*]+\*\*\s*[–—:-]?", "", paragraph)
-            prose = re.sub(r"\[[^\]]*\](?:\([^)]*\))?", "", prose)
-            method_claim = re.search(r"\b(?:retriev\w*|generat\w*|architect\w*|pipeline|model\w*|method\w*|embed\w*|vector|index\w*|train\w*|corpus|corpora)\b", prose, re.I)
-            explicit_boundary = re.search(
-                r"\b(?:no|not(?!\s+only\b)|cannot|without|lack\w*|missing|unavailable|undisclosed|unknown|unspecified|unreported|indeterminate|absent|omitted)\b|\b(?:doesn|isn|aren)['’]t\b",
-                prose, re.I,
-            )
-            if (metadata_method and method_claim and not explicit_boundary) or re.search(r"\b(?:(?:study|paper|authors?|framework)\s+(?:likely|probably|possibly|may|might)\s+(?:use|employ|adopt|acknowledge|note)\w*|(?:title|metadata|validation)\b[^.!?\n]{0,100}\b(?:impli|suggest)\w*)", paragraph, re.I):
+            prose = _TITLE_PREFIX_RE.sub("", paragraph)
+            prose = _CITATION_STRIP_RE.sub("", prose)
+            method_claim = _METHOD_CLAIM_RE.search(prose)
+            explicit_boundary = _EXPLICIT_BOUNDARY_RE.search(prose)
+            if (metadata_method and method_claim and not explicit_boundary) or _SPECULATIVE_RE.search(paragraph):
                 paragraphs[index] = f"{OMITTED_PASSAGE} (speculative attribution of methods or limitations)."
         replacement = "\n\n".join(paragraphs)
         def replace_section(match: re.Match, content: str = replacement) -> str:
@@ -130,10 +158,6 @@ def parse_model_guidance(response: str, requested: list[int]) -> dict[int, str]:
         if body and ground_answer(candidate, {}, [], allow_general_guidance=True) == candidate:
             guidance[number] = body
     return guidance
-
-
-def _normalized_title(value: str) -> str:
-    return re.sub(r"[\W_]+", "", unicodedata.normalize("NFKC", value).casefold())
 
 
 def ensure_source_summaries(report: str, documents: list[Document]) -> str:

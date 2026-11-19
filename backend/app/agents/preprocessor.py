@@ -14,6 +14,18 @@ from langchain_core.documents import Document
 
 from .base_agent import BaseAgent
 
+_MULTI_NEWLINE = re.compile(r"\n{3,}")
+_MULTI_SPACE = re.compile(r"[ \t]+")
+_UNICODE_MAP = str.maketrans({
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2026": "...",
+})
+
 
 class PreprocessorAgent(BaseAgent):
     def __init__(self):
@@ -21,26 +33,15 @@ class PreprocessorAgent(BaseAgent):
 
     @staticmethod
     def _normalize_whitespace(text: str) -> str:
-        text = text.replace("\r\n", "\n").replace("\r", "\n")
-        text = re.sub(r"\n{3,}", "\n\n", text)
-        text = re.sub(r"[ \t]+", " ", text)
+        if "\r" in text:
+            text = text.replace("\r\n", "\n").replace("\r", "\n")
+        text = _MULTI_NEWLINE.sub("\n\n", text)
+        text = _MULTI_SPACE.sub(" ", text)
         return text.strip()
 
     @staticmethod
     def _normalize_unicode(text: str) -> str:
-        text = unicodedata.normalize("NFC", text)
-        replacements = {
-            "\u2018": "'",
-            "\u2019": "'",
-            "\u201c": '"',
-            "\u201d": '"',
-            "\u2013": "-",
-            "\u2014": "-",
-            "\u2026": "...",
-        }
-        for old, new in replacements.items():
-            text = text.replace(old, new)
-        return text
+        return unicodedata.normalize("NFC", text).translate(_UNICODE_MAP)
 
     def process(self, input_data: list[Document], context: dict[str, Any]) -> list[Document]:
         cleaned: list[Document] = []

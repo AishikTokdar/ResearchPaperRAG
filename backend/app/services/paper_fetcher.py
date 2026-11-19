@@ -493,28 +493,25 @@ class PaperFetcher:
         seen_titles: set[str] = set()
         seen_dois: set[str] = set()
         query_terms = set(words(query))
+        q_len = max(1, len(query_terms))
         for name, _ in search_funcs:
             for rank, paper in enumerate(sources.get(name, [])):
-                title = " ".join(words(paper["title"]))
-                doi = (
-                    str(
-                        paper.get("doi")
-                        or (
-                            paper.get("url", "").split("doi.org/", 1)[1]
-                            if "doi.org/" in paper.get("url", "")
-                            else ""
-                        )
-                    )
-                    .casefold()
-                    .strip()
+                raw_title = paper.get("title", "")
+                p_words = words(raw_title)
+                title = " ".join(p_words)
+                raw_doi = paper.get("doi") or (
+                    paper.get("url", "").split("doi.org/", 1)[1]
+                    if "doi.org/" in paper.get("url", "")
+                    else ""
                 )
+                doi = str(raw_doi).casefold().strip() if raw_doi else ""
                 if title in seen_titles or (doi and doi in seen_dois):
                     continue
                 seen_titles.add(title)
                 if doi:
                     seen_dois.add(doi)
-                relevance = len(query_terms & set(words(paper["title"]))) / max(1, len(query_terms))
-                paper["_rank_score"] = relevance + 1 / (60 + rank + 1)
+                relevance = len(query_terms & set(p_words)) / q_len
+                paper["_rank_score"] = relevance + 1.0 / (61 + rank)
                 combined.append(paper)
         combined.sort(key=lambda paper: paper["_rank_score"], reverse=True)
         for paper in combined:

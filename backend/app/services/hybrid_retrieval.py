@@ -7,9 +7,12 @@ from typing import Any
 
 from langchain_core.documents import Document
 
+_WORD_PATTERN = re.compile(r"[\w-]{2,}")
+_RRF_SCORES = tuple(1.0 / (60 + r) for r in range(1, 2001))
+
 
 def words(text: str) -> list[str]:
-    return re.findall(r"[\w-]{2,}", text.casefold())
+    return _WORD_PATTERN.findall(text.casefold())
 
 
 class HybridIndex:
@@ -22,30 +25,62 @@ class HybridIndex:
         for count in self.counts:
             self.frequency.update(count.keys())
 
+        self._doc_length_denominators = [
+            1.5 * (0.25 + 0.75 * length / self.average) for length in self.lengths
+        ]
+
+        self._inverted_index: dict[str, list[tuple[int, float]]] = {}
+        for doc_idx, count in enumerate(self.counts):
+            denom = self._doc_length_denominators[doc_idx]
+            for word, tf in count.items():
+                self._inverted_index.setdefault(word, []).append(
+                    (doc_idx, tf / (tf + denom))
+                )
+
+        num_docs = len(documents)
+        self._idfs: dict[str, float] = {
+            word: math.log(1 + (num_docs - df + 0.5) / (df + 0.5)) * 2.5
+            for word, df in self.frequency.items()
+        }
+
+        self._positions = {self.key(doc): i for i, doc in enumerate(documents)}
+
     def lexical(self, query: str, k: int = 30) -> list[int]:
-        scores = []
-        for i, count in enumerate(self.counts):
-            score = 0.0
-            for word in set(words(query)):
-                tf = count[word]
-                if tf:
-                    df = self.frequency[word]
-                    idf = math.log(1 + (len(self.documents) - df + 0.5) / (df + 0.5))
-                    score += (
-                        idf * tf * 2.5 / (tf + 1.5 * (0.25 + 0.75 * self.lengths[i] / self.average))
-                    )
-            if score > 0:
-                scores.append((score, i))
-        return [i for _, i in sorted(scores, key=lambda pair: (-pair[0], pair[1]))[:k]]
+        num_docs = len(self.documents)
+        if num_docs == 0:
+            return []
+
+        query_terms = set(words(query))
+        if not query_terms:
+            return []
+
+        scores: dict[int, float] = {}
+        for word in query_terms:
+            idf_scaled = self._idfs.get(word)
+            if idf_scaled is None:
+                continue
+            postings = self._inverted_index.get(word)
+            if postings:
+                for doc_idx, tf_norm in postings:
+                    scores[doc_idx] = scores.get(doc_idx, 0.0) + (idf_scaled * tf_norm)
+
+        if not scores:
+            return []
+
+        candidate_scores = [(score, idx) for idx, score in scores.items() if score > 0]
+        return [idx for _, idx in sorted(candidate_scores, key=lambda pair: (-pair[0], pair[1]))[:k]]
 
     def search(self, store: Any, query: str, k: int = 30) -> list[Document]:
         dense = store.similarity_search(query, k=min(k, len(self.documents)))
-        positions = {self.key(doc): i for i, doc in enumerate(self.documents)}
-        dense_ids = [positions[self.key(doc)] for doc in dense if self.key(doc) in positions]
+        positions = self._positions
+        dense_ids = [positions[key] for doc in dense if (key := self.key(doc)) in positions]
         scores: dict[int, float] = {}
+        rrf_len = len(_RRF_SCORES)
         for ranking in (dense_ids, self.lexical(query, k)):
             for rank, index in enumerate(ranking, 1):
-                scores[index] = scores.get(index, 0) + 1 / (60 + rank)
+                scores[index] = scores.get(index, 0.0) + (
+                    _RRF_SCORES[rank - 1] if rank <= rrf_len else 1.0 / (60 + rank)
+                )
         ordered = sorted(scores, key=lambda index: (-scores[index], index))
         return [self.documents[i] for i in ordered[:k]]
 

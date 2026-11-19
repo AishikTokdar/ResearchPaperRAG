@@ -17,6 +17,7 @@ import ipaddress
 import threading
 import time
 from collections import deque
+from functools import lru_cache
 
 from fastapi import HTTPException, Request
 
@@ -27,16 +28,31 @@ _upload_hits: dict[str, deque[float]] = {}
 _ask_hits: dict[str, deque[float]] = {}
 
 
+@lru_cache(maxsize=4)
+def _parse_trusted_networks(trusted_proxy_ips: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    networks = []
+    for cidr in trusted_proxy_ips.split(","):
+        cidr = cidr.strip()
+        if cidr:
+            try:
+                networks.append(ipaddress.ip_network(cidr, strict=False))
+            except ValueError:
+                pass
+    return tuple(networks)
+
+
 def client_ip(request: Request) -> str:
     peer = request.client.host if request.client else "unknown"
-    try:
-        trusted = any(
-            ipaddress.ip_address(peer) in ipaddress.ip_network(cidr.strip(), strict=False)
-            for cidr in get_settings().trusted_proxy_ips.split(",")
-            if cidr.strip()
-        )
-    except ValueError:
-        trusted = False
+    trusted = False
+    trusted_str = get_settings().trusted_proxy_ips.strip()
+    if trusted_str:
+        networks = _parse_trusted_networks(trusted_str)
+        if networks:
+            try:
+                peer_addr = ipaddress.ip_address(peer)
+                trusted = any(peer_addr in net for net in networks)
+            except ValueError:
+                trusted = False
     x_real = request.headers.get("x-real-ip")
     if trusted and x_real:
         try:

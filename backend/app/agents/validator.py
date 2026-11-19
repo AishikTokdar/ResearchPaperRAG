@@ -9,6 +9,13 @@ from typing import Any
 
 from .base_agent import BaseAgent
 
+_FAILURE_INDICATORS = (
+    "i cannot find",
+    "i don't have information",
+    "not mentioned in the document",
+    "no information available",
+)
+
 
 class ValidatorAgent(BaseAgent):
     def __init__(self, min_answer_length: int = 10, max_answer_length: int = 5000):
@@ -27,14 +34,8 @@ class ValidatorAgent(BaseAgent):
         if len(answer) > self.max_answer_length:
             validation_issues.append("answer_long")
 
-        failure_indicators = [
-            "I cannot find",
-            "I don't have information",
-            "not mentioned in the document",
-            "no information available",
-        ]
-
-        is_uncertain = any(indicator.lower() in answer.lower() for indicator in failure_indicators)
+        answer_lower = answer.casefold()
+        is_uncertain = any(indicator in answer_lower for indicator in _FAILURE_INDICATORS)
 
         context["validation_passed"] = len(validation_issues) == 0
         context["validation_issues"] = validation_issues
