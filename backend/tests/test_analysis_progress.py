@@ -47,7 +47,7 @@ class ReportProgressTests(unittest.TestCase):
             yield {
                 "type": "complete",
                 "answer": "\n".join(
-                    f"## {i}. {title}\nSupported [E1]."
+                    f"## {i}. {title}\nSupported result [E1]."
                     for i, title in enumerate(REPORT_SECTIONS, 1)
                 ),
                 "warnings": [],

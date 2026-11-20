@@ -21,7 +21,7 @@ from app.services.report_presentation import (
 
 
 def sources():
-    return [Document(page_content=f"Study {i} evaluates educational chatbot retrieval. Its source-specific objective is curriculum coverage.",
+    return [Document(page_content=f"Study {i} evaluates educational chatbot retrieval. Its source-specific objective is curriculum coverage. Original supported finding. Curriculum coverage is the source-specific objective. Additional paper analysis. The studies evaluate retrieval.",
                      metadata={"paper_id": f"paper-{i}", "paper_title": f"Educational chatbot study {i}",
                                "source": f"https://example.org/paper-{i}",
                                "evidence_scope": "metadata_only" if i == 5 else "abstract_only"})
@@ -117,8 +117,8 @@ class FiveSourceReportTests(unittest.TestCase):
         report = "\n\n".join(f"## {i}. {title}\n{both}" for i, title in enumerate(REPORT_SECTIONS, 1))
         report = report.replace(f"## 6. Research Gaps\n{both}", "## 6. Research Gaps\nInitial source [A](https://example.org/paper-1).")
         engine.llm.generate_text = MagicMock(side_effect=[
-            ("## 6. Research Gaps\nFirst source analysis [E1].", "fixture", []),
-            ("## 6. Research Gaps\nMissing source analysis [E1].", "fixture", []),
+            ("## 6. Research Gaps\nProposed research: First source analysis [E1].", "fixture", []),
+            ("## 6. Research Gaps\nProposed research: Missing source analysis [E1].", "fixture", []),
         ])
         result = engine._complete_report(report, "education", docs, DEFAULT_MODEL)
         retry = engine.llm.generate_text.call_args_list[1].args
@@ -139,7 +139,7 @@ class FiveSourceReportTests(unittest.TestCase):
         report = "\n\n".join(f"## {i}. {title}\nSupported content [Study](https://example.org/paper-1)." for i, title in enumerate(REPORT_SECTIONS, 1))
         report = report.replace("## 6. Research Gaps\nSupported content [Study](https://example.org/paper-1).", f"## 6. Research Gaps\n{OMITTED_PASSAGE}.")
         engine.llm.generate_text = MagicMock(return_value=(
-            "## 6. Research Gaps\nCurriculum coverage can be investigated [E1].\n\nA comparative evaluation is proposed [E2].\n\nUncited unsupported synthesis.", "fixture", []))
+            "## 6. Research Gaps\nProposed research: Curriculum coverage can be investigated [E1].\n\nProposed research: A comparative evaluation is proposed [E2].\n\nUncited unsupported synthesis.", "fixture", []))
         result = engine._complete_report(report, "education", docs, DEFAULT_MODEL)
         engine.llm.generate_text.assert_called_once()
         self.assertIn("Curriculum coverage can be investigated", result)
@@ -222,7 +222,7 @@ class FiveSourceReportTests(unittest.TestCase):
         engine.documents = docs
         valid = "\n\n".join(f"## {i}. {title}\nSupported content [Study](https://example.org/paper-1)." for i, title in enumerate(REPORT_SECTIONS, 1))
         report = valid.replace("## 6. Research Gaps\nSupported content [Study](https://example.org/paper-1).", f"## 6. Research Gaps\n{OMITTED_PASSAGE}.")
-        engine.llm.generate_text = MagicMock(return_value=("## 6. Research Gaps\nEvaluate curriculum coverage and multilingual retrieval separately from answer faithfulness, using held-out course materials to identify where educational chatbots fail [E1].", "fixture", []))
+        engine.llm.generate_text = MagicMock(return_value=("## 6. Research Gaps\nProposed research: Evaluate curriculum coverage and multilingual retrieval separately from answer faithfulness, using held-out course materials to identify where educational chatbots fail [E1].", "fixture", []))
         result = engine._complete_report(report, "education", docs, DEFAULT_MODEL)
         engine.llm.generate_text.assert_called_once()
         args = engine.llm.generate_text.call_args.args
@@ -247,7 +247,7 @@ class FiveSourceReportTests(unittest.TestCase):
             for i, title in enumerate(REPORT_SECTIONS, 1)
         )
         engine.llm.generate_text = MagicMock(side_effect=[
-            ("## 6. Research Gaps\nEvaluate curriculum coverage using held-out course material [E1].", "fixture", []),
+            ("## 6. Research Gaps\nProposed research: Evaluate curriculum coverage using held-out course material [E1].", "fixture", []),
             ("## 8. Novel Paper Suggestions\nProposed research: Design a curriculum-aware retrieval benchmark with independent evaluation [E1].", "fixture", []),
         ])
         result = engine._complete_report(report, "education", sources(), DEFAULT_MODEL)

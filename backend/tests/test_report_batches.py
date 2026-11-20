@@ -19,6 +19,8 @@ PROSE = ("The selected study evaluates curriculum-grounded retrieval and explain
          "claims require independent investigation using appropriate baselines and assessment criteria.")
 
 
+PROSE = PROSE.replace(". ", "; ")
+
 def engine_for(count):
     engine = GapAnalyzerEngine()
     docs = [Document(page_content=PROSE, metadata={"paper_id": f"paper-{i}", "paper_title": f"Selected study {i}",
@@ -120,6 +122,15 @@ class ReportBatchTests(unittest.TestCase):
         entire = response_for(engine._report_prompt(engine.documents), engine.documents)
         result = engine._validated_batch(entire, engine.documents, (3, 4, 5))
         self.assertEqual(list(section_bodies(result)), [3, 4, 5])
+
+    def test_batch_validation_collects_feedback_without_using_stale_citation_ids(self):
+        engine = engine_for(5)
+        feedback = []
+        result = engine._validated_batch("## 3. Common Methods\nFabricated accuracy was 99% [E4].",
+                                         engine.documents, (3,), feedback)
+        self.assertNotIn("99%", result)
+        self.assertIn("99%", feedback[0]["rejected_paragraph"])
+        self.assertNotIn("[E4]", feedback[0]["rejected_paragraph"])
 
 
 if __name__ == "__main__":

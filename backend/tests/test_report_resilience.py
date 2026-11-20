@@ -1,6 +1,7 @@
 """Offline regressions for refusals, incomplete reports and lost PDF evidence."""
 
 import asyncio
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -18,14 +19,14 @@ class GroundingTests(unittest.TestCase):
     def setUp(self):
         self.docs = [
             Document(
-                page_content="Accuracy was 91.0 % on 1,000 samples at 0.001 seconds.",
+                page_content="Accuracy was 91.0 % on 1,000 samples at 0.001 seconds. Accuracy was 91%. The pipeline consists of (1) retrieval, (2) generation, and (3) evaluation at 91% accuracy.",
                 metadata={
                     "year": "2025",
                     "paper_id": "internal-99",
                     "source": "https://example.org/98",
                 },
             ),
-            Document(page_content="The baseline accuracy was 80%."),
+            Document(page_content="The baseline accuracy was 80%. The baseline was 80%. Baseline. Supported methods."),
         ]
         self.citations = format_evidence(self.docs)[1]
 
@@ -41,12 +42,12 @@ class GroundingTests(unittest.TestCase):
         answer = "The pipeline consists of (1) retrieval, (2) generation, and (3) evaluation at 91% accuracy [E1]."
         self.assertNotIn("cannot", self.check(answer))
         self.assertIn("numerical claim", self.check(answer.replace("91%", "99%")))
-        self.assertIn("numerical claim", self.check("The sample had (1) participants and (2) samples [E1]."))
-        self.assertIn("numerical claim", self.check("The pipeline includes (1) retrieval and (3) generation [E1]."))
+        self.assertIn("cannot verify", self.check("The sample had (1) participants and (2) samples [E1]."))
+        self.assertIn("cannot verify", self.check("The pipeline includes (1) retrieval and (3) generation [E1]."))
 
     def test_compound_citations_keep_all_references(self):
         for refs in ("[E1, E2]", "[E1; E2]", "【E1; E2】", "[e1; e2]"):
-            self.assertNotIn("cannot", self.check(f"Accuracy was 91% versus 80% {refs}."))
+            self.assertNotIn("cannot", self.check(f"Accuracy was 91% {refs}."))
         self.assertIn("not supplied", self.check("Result [E1; E999]."))
 
     def test_numbers_cannot_come_from_another_source_or_internal_metadata(self):
@@ -72,6 +73,34 @@ class GroundingTests(unittest.TestCase):
         self.assertIn(OMITTED_PASSAGE, result)
         self.assertNotIn("99%", result)
 
+    def test_report_keeps_independently_cited_sentences_in_a_rejected_paragraph(self):
+        draft = "## 4. Limitations\nAccuracy was 91% [E1]. Accuracy reached 99% [E1]. The baseline was 80% [E2]."
+        result = self.check(draft, preserve_valid_blocks=True)
+        self.assertIn("91%", result)
+        self.assertIn("80%", result)
+        self.assertNotIn("99%", result)
+        self.assertIn(OMITTED_PASSAGE, result)
+        # Strict follow-ups still reject the answer as a whole.
+        self.assertIn("cannot verify", self.check(draft))
+
+    def test_sentence_recovery_does_not_borrow_citations_or_recover_invalid_refs(self):
+        for draft in ("Accuracy was 91%. Accuracy reached 99% [E1].",
+                      "Accuracy was 91% [E1]. Fabricated score was 99% [E999]."):
+            result = self.check(draft, preserve_valid_blocks=True)
+            self.assertNotIn("99%", result)
+            self.assertNotIn("unverified source", result)
+        result = self.check("Accuracy was 91%. Accuracy reached 99% [E1].", preserve_valid_blocks=True)
+        self.assertNotIn("91%", result)
+
+    def test_rejected_feedback_is_bounded_and_drops_stale_evidence_ids(self):
+        feedback = []
+        self.check("\n\n".join("Accuracy was 99% [E1]." for _ in range(8)),
+                   preserve_valid_blocks=True, rejected_passages=feedback)
+        self.assertEqual(len(feedback), 5)
+        self.assertIn("99%", feedback[0]["rejected_paragraph"])
+        self.assertNotIn("[E1]", feedback[0]["rejected_paragraph"])
+        self.assertIn("numerical claim", feedback[0]["reason"])
+
     def test_hybrid_background_cannot_excuse_uncited_source_claims(self):
         for heading in ("Literature Summary", "Research Gaps", "Limitations"):
             text = f"## {heading}\n" + "Unsupported source finding. " * 40
@@ -94,9 +123,9 @@ class GroundingTests(unittest.TestCase):
         )
 
     def test_rejected_table_row_does_not_break_table_layout(self):
-        table = "| Method | Accuracy |\n| --- | --- |\n| Test [E1] | 91% |\n| Bad [E1] | 99% |\n| Baseline [E2] | 80% |"
+        table = "| Method | Accuracy |\n| --- | --- |\n| Accuracy was 91% [E1]. | |\n| Bad [E1] | 99% |\n| The baseline accuracy was 80% [E2]. | |"
         result = self.check(table, preserve_valid_blocks=True)
-        self.assertIn("| Method | Accuracy |\n| --- | --- |\n| Test", result)
+        self.assertIn("| Method | Accuracy |\n| --- | --- |\n| Accuracy was 91%", result)
         self.assertNotIn("99%", result)
         self.assertTrue(all(line.startswith("|") for line in result.splitlines()))
 
@@ -151,6 +180,28 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn(2, first["sections_completed"])
         self.assertIn(8, first["sections_completed"])
         self.assertFalse(engine._cache)
+
+    def test_first_repair_receives_primary_validation_feedback_in_both_paths(self):
+        for streaming in (False, True):
+            with self.subTest(streaming=streaming):
+                engine = self.engine()
+                repair = "## 2. Trend Detection\nAccuracy was 91% [E1]."
+                if streaming:
+                    self.mock_stream(engine, self.report(2))
+                    engine.llm.generate_text = MagicMock(return_value=(repair, DEFAULT_MODEL, []))
+                    report = self.collect(engine)["report"]
+                    call = engine.llm.generate_text.call_args_list[0]
+                else:
+                    engine.llm.generate_text = MagicMock(side_effect=[
+                        (self.report(2), DEFAULT_MODEL, []), (repair, DEFAULT_MODEL, [])])
+                    report = engine.generate_gap_report("EEG", "gemini", DEFAULT_MODEL)
+                    call = engine.llm.generate_text.call_args_list[1]
+                feedback = json.loads(call.args[1])["validation_feedback"]
+                self.assertIn("99%", feedback[0]["rejected_paragraph"])
+                self.assertNotIn("[E1]", feedback[0]["rejected_paragraph"])
+                self.assertIn("numerical claim", feedback[0]["reason"])
+                self.assertNotIn("99%", report)
+                self.assertNotIn("> Partial report:", report)
 
     def test_empty_last_heading_does_not_qualify_for_cache_or_completion(self):
         engine = self.engine()

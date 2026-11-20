@@ -81,7 +81,7 @@ class GroundingChecks(unittest.TestCase):
         self.citations = format_evidence(self.docs)[1]
 
     def test_supported_number_passes(self):
-        result = ground_answer("Accuracy was 91% [E1].", self.citations, self.docs)
+        result = ground_answer("The measured accuracy was 91% on held-out data [E1].", self.citations, self.docs)
         self.assertIn("91%", result)
         self.assertNotIn("cannot", result)
 
@@ -93,21 +93,21 @@ class GroundingChecks(unittest.TestCase):
     def test_disclaimer_cannot_excuse_uncited_claim_elsewhere(self):
         for text in (
             "Insufficient evidence.\n\nAccuracy was 99%.",
-            "Supported [E1].\n\nUncited finding.",
-            "Supported [E1].\n- Uncited finding.",
+            "The measured accuracy was 91% on held-out data [E1].\n\nUncited finding.",
+            "The measured accuracy was 91% on held-out data [E1].\n- Uncited finding.",
         ):
             self.assertIn("did not cite", ground_answer(text, self.citations, self.docs))
 
     def test_uncited_table_data_is_rejected(self):
-        text = "Supported [E1].\n\n| Method | Result |\n| --- | --- |\n| Unmeasured method | Best |"
+        text = "The measured accuracy was 91% on held-out data [E1].\n\n| Method | Result |\n| --- | --- |\n| Unmeasured method | Best |"
         self.assertIn("did not cite", ground_answer(text, self.citations, self.docs))
 
     def test_table_headers_and_numbered_headings_are_not_claims(self):
-        text = "## 1. Results\n\n| Method | Accuracy |\n| --- | --- |\n| Test [E1] | 91% |"
+        text = "## 1. Results\n\n| Method | Accuracy |\n| --- | --- |\n| The measured accuracy was 91% on held-out data [E1]. | |"
         self.assertNotIn("cannot", ground_answer(text, self.citations, self.docs))
 
     def test_opted_in_background_mode_still_checks_document_claims(self):
-        answer = "Accuracy was 91% [E1].\n\n## Background knowledge\n\nGeneral background beyond the source."
+        answer = "The measured accuracy was 91% on held-out data [E1].\n\n## Background knowledge\n\nGeneral background beyond the source."
         self.assertIn("did not cite", ground_answer(answer, self.citations, self.docs))
         self.assertIn(
             "General background",
@@ -162,7 +162,7 @@ class CachingAndConversationTests(unittest.TestCase):
         docs = [Document(page_content="Supported evidence")]
         for warnings in ([], ["Output was interrupted"]):
             engine.llm.generate_text = MagicMock(
-                return_value=("## 1. Literature Summary\nSupported [E1].", "fake", warnings)
+                return_value=("## 1. Literature Summary\nThe measured accuracy was 91% on held-out data [E1].", "fake", warnings)
             )
             for _ in range(2):
                 engine._cached_generate("system", "question", docs, "model", "gap_report", 100)
@@ -170,7 +170,7 @@ class CachingAndConversationTests(unittest.TestCase):
 
     def test_changed_evidence_or_generation_settings_invalidate_answers(self):
         engine = GapAnalyzerEngine()
-        engine.llm.generate_text = MagicMock(return_value=("Supported [E1].", "fake", []))
+        engine.llm.generate_text = MagicMock(return_value=("The measured accuracy was 91% on held-out data [E1].", "fake", []))
         for text, model, budget in (
             ("first evidence", "model", 100),
             ("changed evidence", "model", 100),

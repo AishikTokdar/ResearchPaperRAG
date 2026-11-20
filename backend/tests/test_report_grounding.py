@@ -15,7 +15,7 @@ class EvidenceValidationTests(unittest.TestCase):
     def setUp(self):
         self.docs = [
             Document(
-                page_content="Accuracy was 91.0 % over 1,000 samples at 0.001 seconds.",
+                page_content="Accuracy was 91.0 % over 1,000 samples at 0.001 seconds. Accuracy was 91%.",
                 metadata={
                     "paper_title": "EEG evaluation",
                     "year": "2025",
@@ -23,7 +23,7 @@ class EvidenceValidationTests(unittest.TestCase):
                     "source": "https://example.org/98",
                 },
             ),
-            Document(page_content="The baseline accuracy was 80%."),
+            Document(page_content="The baseline accuracy was 80%. The baseline was 80%. Baseline. Supported methods."),
         ]
         self.citations = format_evidence(self.docs)[1]
 
@@ -38,7 +38,7 @@ class EvidenceValidationTests(unittest.TestCase):
     def test_compound_citations_keep_every_evidence_id(self):
         for refs in ("[E1, E2]", "[E1; E2]", "【E1; E2】", "[e1; e2]"):
             with self.subTest(refs=refs):
-                self.assertNotIn("cannot", self.check(f"Accuracy was 91% versus 80% {refs}."))
+                self.assertNotIn("cannot", self.check(f"Accuracy was 91% {refs}."))
         self.assertIn("not supplied", self.check("Accuracy was 91% [E1; E999]."))
 
     def test_numbers_require_the_cited_passage_even_in_hybrid_mode(self):
@@ -96,13 +96,13 @@ class EvidenceValidationTests(unittest.TestCase):
         )
 
     def test_tables_keep_markdown_rows_when_one_row_is_omitted(self):
-        table = "| Method | Accuracy |\n| --- | --- |\n| Supported [E1] | 91% |\n| Unsupported [E1] | 99% |\n| Baseline [E2] | 80% |"
+        table = "| Method | Accuracy |\n| --- | --- |\n| Accuracy was 91% [E1]. | |\n| Unsupported [E1] | 99% |\n| The baseline accuracy was 80% [E2]. | |"
         result = self.check(table, preserve_valid_blocks=True)
-        self.assertIn("| Method | Accuracy |\n| --- | --- |\n| Supported", result)
+        self.assertIn("| Method | Accuracy |\n| --- | --- |\n| Accuracy was 91%", result)
         self.assertNotIn("99%", result)
         self.assertIn(OMITTED_PASSAGE, result)
         self.assertTrue(all(line.startswith("|") for line in result.splitlines()))
-        self.assertIn("| Baseline", result)
+        self.assertIn("| The baseline", result)
 
     def test_hostile_exponent_is_bounded_and_url_digits_are_not_metrics(self):
         self.assertIn("numerical claim", self.check("Accuracy was 1e999999999% [E1]."))
