@@ -156,7 +156,7 @@ class GroundingTests(unittest.TestCase):
 
     def test_gap_cache_is_per_engine_and_keeps_full_passages(self):
         doc = Document(
-            page_content="important evidence " * 45,
+            page_content="Result. " + "important evidence " * 45,
             metadata={"paper_title": "Paper", "paper_id": "p"},
         )
         first, other = GapAnalyzerEngine(), GapAnalyzerEngine()
@@ -304,7 +304,7 @@ class ProviderTests(unittest.TestCase):
             return events
 
         events = asyncio.run(run())
-        self.assertEqual([e["content"] for e in events if e["type"] == "token"], ["partial"])
+        self.assertEqual([e["content"] for e in events if e["type"] == "token"], [])
 
     def test_usage_logging_contains_real_usage_without_prompt_text(self):
         callback = UsageLogger("test", "provider", "model", 1)

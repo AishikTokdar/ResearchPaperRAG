@@ -11,13 +11,13 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from starlette.concurrency import run_in_threadpool
 
 from ..agents.base_agent import AgentResult
 from ..agents.pipeline import AgentPipeline
 from ..models import AnswerResponse, QuestionRequest
 from ..services.ip_rate_limit import check_ask_rate_limit
 from ..services.llm_service import LLMService
+from ..services.request_limits import run_bounded_worker
 from ..services.usage_counters import increment_chat_completions
 from ..services.vector_store import VectorStoreService
 from .upload import get_vector_service
@@ -56,7 +56,7 @@ async def ask_question(
 
     try:
         pipeline = AgentPipeline(vector_service, llm_service)
-        result = await run_in_threadpool(
+        result = await run_bounded_worker(
             pipeline.run,
             question=request.question,
             model=request.model,
@@ -118,7 +118,7 @@ async def _stream_pipeline(
         results: list[AgentResult] = []
         total_ms = 0.0
 
-        ok, chunks, ms, err = await run_in_threadpool(
+        ok, chunks, ms, err = await run_bounded_worker(
             pipeline._step, pipeline.extractor, question, context, results
         )
         total_ms += ms
@@ -126,7 +126,7 @@ async def _stream_pipeline(
             yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
-        ok, filtered, ms, err = await run_in_threadpool(
+        ok, filtered, ms, err = await run_bounded_worker(
             pipeline._step, pipeline.analyzer, chunks, context, results
         )
         total_ms += ms
@@ -134,7 +134,7 @@ async def _stream_pipeline(
             yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
-        ok, cleaned, ms, err = await run_in_threadpool(
+        ok, cleaned, ms, err = await run_bounded_worker(
             pipeline._step, pipeline.preprocessor, filtered, context, results
         )
         total_ms += ms
@@ -142,7 +142,7 @@ async def _stream_pipeline(
             yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
-        ok, optimised_pair, ms, err = await run_in_threadpool(
+        ok, optimised_pair, ms, err = await run_bounded_worker(
             pipeline._step, pipeline.optimizer, (question, cleaned), context, results
         )
         total_ms += ms
@@ -182,7 +182,7 @@ async def _stream_pipeline(
         context["model_used"] = model_used
         context["answer_length"] = len(answer)
 
-        ok, validated, ms, err = await run_in_threadpool(
+        ok, validated, ms, err = await run_bounded_worker(
             pipeline._step, pipeline.validator, answer, context, results
         )
         total_ms += ms
@@ -190,7 +190,7 @@ async def _stream_pipeline(
             yield sse("error", {"message": "The response could not be completed. Please retry."})
             return
 
-        ok, assembled, ms, err = await run_in_threadpool(
+        ok, assembled, ms, err = await run_bounded_worker(
             pipeline._step, pipeline.assembler, validated, context, results
         )
         total_ms += ms

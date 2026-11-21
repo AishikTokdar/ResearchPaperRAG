@@ -7,12 +7,12 @@ Endpoints for document upload and processing.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
-from starlette.concurrency import run_in_threadpool
 
 from ..config import get_settings
 from ..models import DocumentFileMeta, StatusResponse, UploadResponse
 from ..services.ip_rate_limit import check_upload_rate_limit
 from ..services.pdf_processor import PDFProcessor
+from ..services.request_limits import run_bounded_worker
 from ..services.session_vector_registry import SessionVectorRegistry, is_valid_session_id
 from ..services.usage_counters import increment_pdf_uploads
 from ..services.vector_store import VectorStoreService
@@ -118,7 +118,7 @@ async def upload_pdf(
 
     for fname, data in file_contents:
         try:
-            res = await run_in_threadpool(pdf_processor.process_uploaded_file, data, fname)
+            res = await run_bounded_worker(pdf_processor.process_uploaded_file, data, fname)
             all_chunks.extend(res.chunks)
             file_metas.append(
                 DocumentFileMeta(
@@ -127,6 +127,8 @@ async def upload_pdf(
                     chunks_created=res.total_chunks,
                 )
             )
+        except HTTPException:
+            raise
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
@@ -152,7 +154,9 @@ async def upload_pdf(
         raise HTTPException(400, "Documents exceed the indexing limit")
     vector_service = get_vector_registry().activate(vector_service)
     try:
-        await run_in_threadpool(vector_service.create_from_documents, all_chunks)
+        await run_bounded_worker(vector_service.create_from_documents, all_chunks)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             503, "Document indexing is unavailable. Check server storage and retry."

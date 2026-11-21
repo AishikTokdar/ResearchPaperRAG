@@ -21,14 +21,14 @@ def _worker_slots() -> BoundedSemaphore:
     return BoundedSemaphore(get_settings().max_concurrent_requests)
 
 
-async def run_bounded_worker(function: Callable, *args: Any) -> Any:
+async def run_bounded_worker(function: Callable, *args: Any, **kwargs: Any) -> Any:
     slots = _worker_slots()
     if not slots.acquire(blocking=False):
         raise HTTPException(429, "Processing workers are busy. Try again shortly.")
 
     def run():
         try:
-            return function(*args)
+            return function(*args, **kwargs)
         finally:
             slots.release()
 

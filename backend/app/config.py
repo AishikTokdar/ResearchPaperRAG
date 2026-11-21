@@ -147,8 +147,10 @@ class Settings(BaseSettings):
         if not raw or not raw.strip():
             return list(_DEFAULT_CORS_ORIGINS)
         parts = [p.strip().rstrip("/") for p in raw.split(",") if p.strip()]
-        if "*" in parts or "*" in raw:
+        if "*" in parts:
             return ["*"]
+        if any("*" in origin for origin in parts):
+            raise ValueError("CORS_ORIGINS requires exact origins or an explicit '*' entry")
         return parts if parts else list(_DEFAULT_CORS_ORIGINS)
 
     max_file_size: int = 50 * 1024 * 1024

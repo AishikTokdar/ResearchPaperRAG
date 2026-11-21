@@ -65,10 +65,10 @@ class FixtureLLM:
         assert "91%" in evidence, "Integration fixture lost source evidence"
         if "Literature Summary" in messages[0].content:
             return "\n\n".join(
-                f"## {i}. {title}\nThe evaluated retrieval method measured accuracy of 91% [E1]."
+                f"## {i}. {title}\nThe evaluated retrieval method measured accuracy of 91% on held-out data [E1]."
                 for i, title in enumerate(REPORT_SECTIONS, 1)
             )
-        return "The evaluated retrieval method measured accuracy of 91% [E1]."
+        return "The evaluated retrieval method measured accuracy of 91% on held-out data [E1]."
 
     def invoke(self, messages, **kwargs):
         return AIMessage(content=self.answer(messages))

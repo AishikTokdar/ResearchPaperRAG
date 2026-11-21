@@ -126,7 +126,7 @@ tags_metadata = [
     },
     {
         "name": "RAG Chat & Reasoning",
-        "description": "Submit questions with SSE token streaming, non-streaming JSON, and multi-model support.",
+        "description": "Submit questions with source-checked SSE answers, non-streaming JSON, and multi-model support.",
     },
     {
         "name": "Research Gap Analyzer",
@@ -155,7 +155,7 @@ This service supports multi-document PDF indexing, local zero-key CPU embeddings
 ### Key Capabilities:
 * **PDF Ingestion** (`POST /upload`): Upload up to 3 PDF files (cumulative size <= 50 MB).
 * **Research Gap Analyzer** (`POST /api/papers/search`, `/api/analyze/gaps`): Fetch papers via free academic APIs & run cross-paper RAG gap analysis.
-* **Real-Time Streaming** (`POST /ask/stream`): Server-Sent Events (SSE) token-by-token streaming responses.
+* **Source-Checked Streaming** (`POST /ask/stream`): Server-Sent Events (SSE) progress followed by a validated answer.
 * **JSON Query** (`POST /ask`): Non-streaming JSON answer with source citations.
 * **Multi-Model Support** (`GET /models`): Configured catalog models across Google Gemini, Groq, SambaNova, and OpenRouter.
 * **Knowledge Modes**: `Hybrid Brain` (synthesized world knowledge) vs `Strict to Source` (strict document citations).
@@ -191,10 +191,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if allow_all else cors_origins,
-        allow_origin_regex=None
-        if allow_all
-        else r"^https://([a-zA-Z0-9_-]+\.)*(pages\.dev|vercel\.app)$",
-        allow_credentials=not allow_all,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
