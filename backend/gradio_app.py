@@ -1,16 +1,15 @@
+import inspect
+import logging
 import os
+import sys
+import time
+import uuid
+from collections.abc import AsyncGenerator
 
 os.environ["GRADIO_SSR_MODE"] = "False"
 
-import uuid
-import time
-import json
-import logging
-import inspect
-from typing import AsyncGenerator
-
-import gradio as gr
-import gradio_client.utils as _client_utils
+import gradio as gr  # noqa: E402 - configure Gradio before import
+import gradio_client.utils as _client_utils  # noqa: E402
 
 try:
     import spaces
@@ -49,9 +48,6 @@ def _safe_json_schema_to_python_type(schema, defs=None):
 if _orig_js_to_py:
     _client_utils._json_schema_to_python_type = _safe_json_schema_to_python_type
 
-import sys
-import os
-
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BACKEND_DIR)
 
@@ -68,43 +64,41 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 try:
+    from app.agents.base_agent import AgentResult
+    from app.agents.pipeline import AgentPipeline
     from app.config import (
-        get_settings,
         AI_PROVIDERS,
         PROVIDER_PRIORITY,
-        get_available_providers,
         get_embedding_fallback_chain,
+        get_settings,
         provider_has_credentials,
     )
+    from app.services.llm_service import LLMService
     from app.services.pdf_processor import PDFProcessor
     from app.services.session_vector_registry import SessionVectorRegistry
-    from app.services.llm_service import LLMService
     from app.services.usage_counters import (
-        increment_pdf_uploads,
         increment_chat_completions,
+        increment_pdf_uploads,
         read_counters,
     )
-    from app.agents.pipeline import AgentPipeline
-    from app.agents.base_agent import AgentResult
 except ModuleNotFoundError:
+    from backend.app.agents.base_agent import AgentResult
+    from backend.app.agents.pipeline import AgentPipeline
     from backend.app.config import (
-        get_settings,
         AI_PROVIDERS,
         PROVIDER_PRIORITY,
-        get_available_providers,
         get_embedding_fallback_chain,
+        get_settings,
         provider_has_credentials,
     )
+    from backend.app.services.llm_service import LLMService
     from backend.app.services.pdf_processor import PDFProcessor
     from backend.app.services.session_vector_registry import SessionVectorRegistry
-    from backend.app.services.llm_service import LLMService
     from backend.app.services.usage_counters import (
-        increment_pdf_uploads,
         increment_chat_completions,
+        increment_pdf_uploads,
         read_counters,
     )
-    from backend.app.agents.pipeline import AgentPipeline
-    from backend.app.agents.base_agent import AgentResult
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +124,9 @@ ALL_MODEL_CHOICES = build_model_choices()
 
 
 def ensure_session_id(session_id: str | None) -> str:
-    if not session_id or not isinstance(session_id, str) or len(session_id.strip()) < 10:
+    from app.services.session_vector_registry import is_valid_session_id
+
+    if not isinstance(session_id, str) or not is_valid_session_id(session_id):
         return str(uuid.uuid4())
     return session_id.strip()
 
@@ -164,9 +160,12 @@ def upload_pdf_files(
 
         try:
             with open(file_path, "rb") as f:
-                data = f.read()
-        except Exception as e:
-            err_msg = f"Could not read file '{fname}': {str(e)}"
+                remaining = settings.max_file_size - total_bytes
+                if os.fstat(f.fileno()).st_size > remaining:
+                    return "Combined PDFs exceed the upload limit.", session_id, {"status": "error", "message": "Upload limit exceeded"}
+                data = f.read(remaining + 1)
+        except Exception:
+            err_msg = "Could not read the uploaded PDF. Please retry."
             return err_msg, session_id, {"status": "error", "message": err_msg}
 
         if len(data) > settings.max_file_size:
@@ -174,6 +173,10 @@ def upload_pdf_files(
             return err_msg, session_id, {"status": "error", "message": err_msg}
 
         total_bytes += len(data)
+        if total_bytes > settings.max_file_size:
+            return "Combined PDFs exceed the upload limit.", session_id, {"status": "error", "message": "Upload limit exceeded"}
+        if not data.startswith(b"%PDF-"):
+            return "Uploaded file is not a PDF.", session_id, {"status": "error", "message": "Invalid PDF"}
         file_contents.append((fname, data))
 
     if total_bytes > settings.max_file_size:
@@ -195,16 +198,17 @@ def upload_pdf_files(
                     "chunks_created": res.total_chunks,
                 }
             )
-        except Exception as e:
-            err_msg = f"Error processing '{fname}': {str(e)}"
+        except Exception:
+            err_msg = "Unable to process the PDF. Check the file and retry."
             return err_msg, session_id, {"status": "error", "message": err_msg}
 
     try:
         vector_service = vector_registry.get_or_create(session_id)
+        vector_service = vector_registry.activate(vector_service)
         vector_service.create_from_documents(all_chunks)
         increment_pdf_uploads()
-    except Exception as e:
-        err_msg = f"Error indexing vector embeddings: {str(e)}"
+    except Exception:
+        err_msg = "Document indexing is unavailable. Please retry."
         return err_msg, session_id, {"status": "error", "message": err_msg}
 
     success_md = (
@@ -279,6 +283,9 @@ async def _stream_chat_response_pairs(
 
     if not q:
         yield history, "Please enter a question.", session_id
+        return
+    if len(q) > 2000 or model not in ALL_MODEL_CHOICES:
+        yield history, "Use a supported model and a question of at most 2,000 characters.", session_id
         return
 
     vector_service = vector_registry.get_or_create(session_id)
@@ -364,6 +371,7 @@ async def _stream_chat_response_pairs(
         )
         accumulated_answer = ""
         model_used = None
+        completed = False
 
         async for event in llm_service.stream_answer_with_failover(
             question=stream_q,
@@ -376,8 +384,12 @@ async def _stream_chat_response_pairs(
                 current_history[-1] = (q, accumulated_answer)
                 yield current_history, "Streaming response tokens...", session_id
             elif event.get("type") == "complete":
+                accumulated_answer = event["answer"]
+                completed = True
                 model_used = event.get("model_used")
 
+        if not completed:
+            raise RuntimeError("The response was interrupted. Please retry.")
         context["model_used"] = model_used
         context["answer_length"] = len(accumulated_answer)
 
@@ -414,9 +426,9 @@ async def _stream_chat_response_pairs(
         current_history[-1] = (q, final_answer)
         yield current_history, final_status, session_id
 
-    except Exception as exc:
+    except Exception:
         logger.exception("Error in Gradio chat stream handler")
-        err_text = f"Pipeline Execution Error: {str(exc)}"
+        err_text = "The response could not be completed. Please retry."
         current_history[-1] = (q, err_text)
         yield current_history, err_text, session_id
 
@@ -504,7 +516,7 @@ def get_metrics_summary() -> dict:
 
 def create_gradio_app() -> gr.Blocks:
     with gr.Blocks(title="ResearchPaperRAG Backend Engine") as demo:
-        session_state = gr.State(ensure_session_id(None))
+        session_state = gr.State(lambda: ensure_session_id(None))
 
         with gr.Column(elem_classes=["main-header"]):
             gr.Markdown(
@@ -525,7 +537,7 @@ def create_gradio_app() -> gr.Blocks:
                 """
             )
 
-        with gr.Tabs() as tabs:
+        with gr.Tabs():
             with gr.Tab("PDF Document Upload", id="tab_upload"):
                 gr.Markdown(
                     """
@@ -553,6 +565,8 @@ def create_gradio_app() -> gr.Blocks:
                     inputs=[file_input, session_state],
                     outputs=[upload_output_md, session_state, upload_meta_json],
                     api_name="upload",
+                    concurrency_id="rag-processing",
+                    concurrency_limit=settings.max_concurrent_requests,
                 )
 
             with gr.Tab("RAG Chat & Pipeline", id="tab_chat"):
@@ -586,7 +600,7 @@ def create_gradio_app() -> gr.Blocks:
                         model_dropdown = gr.Dropdown(
                             choices=ALL_MODEL_CHOICES,
                             value=settings.default_model,
-                            allow_custom_value=True,
+                            allow_custom_value=False,
                             label="Select AI Model",
                             info="Supports OpenRouter, Gemini, Groq & SambaNova free-tier models.",
                         )
@@ -595,7 +609,7 @@ def create_gradio_app() -> gr.Blocks:
                                 "Hybrid Brain (PDF + Pretrained World Knowledge)",
                                 "Strict to Source (PDF Document Only)",
                             ],
-                            value="Hybrid Brain (PDF + Pretrained World Knowledge)",
+                            value="Strict to Source (PDF Document Only)",
                             label="Knowledge Retrieval Mode",
                             info="Hybrid synthesizes general AI knowledge with document facts.",
                         )
@@ -623,6 +637,8 @@ def create_gradio_app() -> gr.Blocks:
                     ],
                     outputs=[chatbot, status_text, session_state],
                     api_name="ask",
+                    concurrency_id="rag-processing",
+                    concurrency_limit=settings.max_concurrent_requests,
                 )
 
                 submit_event.then(lambda: "", outputs=[question_input])
@@ -638,6 +654,8 @@ def create_gradio_app() -> gr.Blocks:
                         session_state,
                     ],
                     outputs=[chatbot, status_text, session_state],
+                    concurrency_id="rag-processing",
+                    concurrency_limit=settings.max_concurrent_requests,
                 ).then(lambda: "", outputs=[question_input])
 
                 clear_button.click(lambda: ([], "*Chat cleared.*"), outputs=[chatbot, status_text])
@@ -687,6 +705,7 @@ def create_gradio_app() -> gr.Blocks:
             api_name="models",
         )
 
+    demo.queue(max_size=16, default_concurrency_limit=settings.max_concurrent_requests)
     return demo
 
 
@@ -694,4 +713,4 @@ demo = create_gradio_app()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", os.environ.get("SERVER_PORT", 7860)))
-    demo.launch(server_name="0.0.0.0", server_port=port, ssr_mode=False)
+    demo.launch(server_name="0.0.0.0", server_port=port, ssr_mode=False, max_file_size=settings.max_file_size)
