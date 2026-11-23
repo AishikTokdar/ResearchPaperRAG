@@ -17,7 +17,7 @@ COPY backend/requirements-api.txt backend/requirements-api.txt
 RUN pip install --no-cache-dir "torch>=2.6,<3" --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY backend ./backend
 
 RUN mkdir -p documents uploads faiss_index faiss_index/sessions .cache/huggingface .cache/transformers \
     && groupadd --system --gid 10001 appgroup \
