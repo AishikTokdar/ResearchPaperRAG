@@ -17,7 +17,7 @@ In Space **Settings → Variables and secrets** configure:
 
 The platform-provided `SPACE_HOST` is also accepted automatically after validating its `.hf.space` hostname. Use the actual runtime domain from your Space, not the `huggingface.co/spaces/...` repository page. Do not use wildcard CORS values; add preview deployment origins explicitly if needed. API keys stay on Hugging Face, never in frontend settings.
 
-Confirm `https://YOUR-SPACE.hf.space/health`, `/docs`, `/config` and `/gradio_api/info` respond. Browser access requires a publicly reachable Space or a separately configured authenticated gateway; never embed an HF access token in frontend assets. Sleeping/restarting Spaces may cold-start and lose in-memory sessions; search/analyze again after restart. Default local disk is not a durability promise. Gradio's optional dependency advisory constraints remain documented in the dependency review.
+Confirm `https://YOUR-SPACE.hf.space/health`, `/docs`, `/config` and `/gradio_api/info` respond. Browser access requires a publicly reachable Space or a separately configured authenticated gateway; never embed an HF access token in frontend assets. Sleeping/restarting Spaces may cold-start and lose in-memory sessions; search/analyze again after restart. Default local disk is not a durability promise. The full profile requires Gradio >=6.32 and Pillow >=13; rebuild the Space to install the patched versions.
 
 ## Cloudflare Pages
 

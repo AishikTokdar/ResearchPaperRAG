@@ -9,7 +9,7 @@
    ```
 
 2. Inside `frontend`, run `npm ci` once, then `npm run build`.
-3. Drag the resulting **`dist` folder** onto Cloudflare Pages Direct Upload.
+3. Drag the resulting **`frontend/dist` folder** onto Cloudflare Pages Direct Upload.
 
 That is the complete upload workflow. `dist` includes the SPA redirects and all compiled assets. Do not upload the raw source folder or `node_modules`: Cloudflare drag-and-drop serves prebuilt files and does not run npm builds. Build again after changing the backend URL; setting variables in the Pages dashboard cannot change an existing local build.
 

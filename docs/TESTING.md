@@ -2,7 +2,7 @@
 
 ## Backend
 
-Activate Python and install `backend/requirements-dev.txt`. From the repository root:
+Activate an isolated Python virtual environment and install `backend/requirements-dev.txt`. Add `-r backend/requirements.txt` to include the optional Gradio regressions. From the repository root:
 
 ```sh
 python -B scripts/check_backend.py
@@ -10,7 +10,7 @@ python -B scripts/check_backend.py
 node scripts/check-backend.mjs
 ```
 
-Run `python -B scripts/audit_core.py --output core-audit.json` to audit the installed API-only dependency closure. It excludes unrelated optional packages, checks installed version ranges and produces a platform-specific snapshot, not a reproducible release lock.
+Run `python -B scripts/audit_core.py --output core-audit.json` to audit the installed API-only dependency closure. It checks installed version ranges, rejects system-site inheritance, includes installed optional Brotli decoders and produces a platform-specific snapshot, not a reproducible release lock. Add `--profile full` to audit the Gradio/Spaces closure. Both root and frontend lockfiles are retained. Run `npm ci` and `npm audit` in each supported install context; use `--workspaces=false` to explicitly check the standalone frontend profile.
 
 The checker runs Ruff, mypy and unittest discovery from `backend`. `BACKEND_PYTHON` selects another interpreter for the Node launcher. The main commands work without Bash on Windows.
 
@@ -64,7 +64,7 @@ Install Playwright as a local test tool:
 
 ```sh
 cd frontend
-npm install --no-save --package-lock=false playwright@1.64.1
+npm install --no-save --package-lock=false playwright@1.65.1
 npx playwright install chromium
 ```
 
@@ -107,3 +107,13 @@ Local verification on 2026-11-14 used the default query and its five selected ed
 Token-budget follow-up: the measured single-pass default-query generation did not hit its 6,000-token output cap, but raw responses omitted citations from whole sections and required expensive repairs. Report generation now uses sequential section groups sized by the number of selected papers: one for two, two for three, and three for four or five, with further division for lower output caps. Every group retains evidence for every selection and uses the original selection-wide word allocation. Regression cases cover 2–5-paper sync/stream parity, final-report caching, citation resolution, no duplicate/unrequested sections, monotonic progress, and preserving earlier groups when a later one fails. Word targets are not guarantees of model compliance or semantic correctness; unavailable source details must not be invented.
 
 The final grouped-generation browser run used the default query with its top five live search results and the configured Groq GPT-OSS 20B model. It completed all eight sections with every selected source represented in sections 1–7, no partial-report notice, working MD/TXT/PDF exports, and no browser errors or overflow at the tested widths. The exported PDF had five pages and was rendered for inspection; the text export contained no Markdown formatting. Separate 120B runs exercised quota delays and upstream timeouts, which remain external completion limits.
+
+Sentence recovery checks exercise independently cited supported sentences next to unsupported numbers, invalid references, uncited neighbors, table-row preservation, strict follow-up refusal, bounded rejection feedback, and first-repair feedback in synchronous, streaming, and batch paths. These deterministic checks measure avoidable content loss, not semantic hallucination rates.
+
+Extractive evidence recovery checks cover supporting passages elsewhere in the same selected paper, correct page citations, unique uncited exact statements, ambiguous sources, conflicting paper titles, wrong-paper citations, matching numbers with different metrics or negation, invalid IDs, metadata-only and unselected records, token bounds, unchanged table rows, and idempotent recovery. Sync/stream and batch cases check recovery before rejection and no additional repair generation when local evidence suffices. A replay using a stored selected-paper abstract checks recovery of a result omitted from the initial context without making a provider request.
+
+## Security remediation regressions (25 November 2026)
+
+`tests/test_security_remediations.py` exercises cross-browser Gradio session/index isolation, bounded upload reads and registry activation, legacy-launcher delegation, exact CORS policy, sentence-level source support, negation/metric swaps, wrong-source citations, metadata-only boundaries, case-sensitive units and signed measurements, heading/refusal laundering, log redaction, suppressed unvalidated tokens, and missing completion handling. Formatting/transport fixtures now use source-supported sentences; prior fixtures that accepted arbitrary cited text no longer define the factual contract. Research proposals and optional background remain explicitly labeled.
+
+Post-remediation verification: 182 backend tests, Ruff/mypy, 22 frontend security tests, TypeScript/lint/production build, and the deterministic browser integration passed. The full Python profile audit covered 118 packages with no advisories/skips; npm audited runtime/build dependencies with zero vulnerabilities. Docker COPY sources and Compose settings were checked; container builds were not run locally because Docker was unavailable.

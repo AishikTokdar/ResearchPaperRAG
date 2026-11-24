@@ -4,7 +4,7 @@ emoji: 📚
 colorFrom: gray
 colorTo: green
 sdk: gradio
-sdk_version: 6.31.0
+sdk_version: 6.32.0
 python_version: "3.12"
 app_file: app.py
 pinned: false
@@ -45,6 +45,6 @@ The default `requirements.txt` includes Gradio/Spaces; `requirements-gradio.txt`
 - `python app.py`: a small Gradio status page at `/gradio/` mounted alongside the API, suitable for the explicit Hugging Face Gradio profile.
 - `python gradio_app.py`: the compatibility PDF-chat interface.
 
-Neither replaces the React research workspace. `spaces` is optional for CPU use; the compatibility adapter handles Gradio 6 messages. The optional dependency profile has the Gradio/Pillow security constraint recorded in [the project README](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/README.md). Keep it out of the primary API deployment unless separately assessed.
+Neither replaces the React research workspace. `spaces` is optional for CPU use; the compatibility adapter handles Gradio 6 messages. The full profile requires Gradio 6.32 or newer and Pillow 13 or newer. Its PDF UI initializes a new capability for every browser session, limits uploads before reading, and only displays source-checked completions. `main.py` delegates to the same session-isolated API as `app/main.py`.
 
 See [deployment](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/docs/DEPLOYMENT.md), [verification](https://github.com/AishikTokdar/ResearchPaperRAG/blob/main/docs/TESTING.md) for runtime limits and tested scope.

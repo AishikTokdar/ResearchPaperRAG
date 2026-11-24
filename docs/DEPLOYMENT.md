@@ -18,15 +18,19 @@ This is a hardened single-instance application, not an account-authenticated mul
 
 Nginx preserves API paths, including research routes, `/ask/stream`, `/status`, `/models`, `/runtime-summary`, `/pipeline-info`, docs and schema. `/api-status` is a SPA route. SSE buffering/cache are off, upload allowance is 51 MiB including multipart overhead, and read timeout is 300 seconds between chunks. Configure upstream proxies/CDNs likewise. See [Nginx proxy documentation](https://nginx.org/en/docs/http/ngx_http_proxy_module.html).
 
+Both root and frontend `package-lock.json` files are retained and audited. Root builds use the workspace lock; standalone frontend/hosting/Docker builds use the frontend lock. The frontend container keeps its usual `frontend` build context (`docker build frontend`); Compose uses the same context.
+
+CORS accepts only exact configured origins (or an explicitly configured global `*`) and does not enable browser credentials. Public Pages/Vercel tenants receive no implicit access.
+
 Empty production `VITE_API_BASE_URL` means same origin. Split hosting needs an explicit HTTPS API origin without `/api`, plus matching API CORS/hosts. Browser URL/storage overrides cannot redirect production traffic. Docker contexts exclude secrets, dependencies, user documents/indexes and caches.
 
 ## Dependencies
 
-`backend/requirements-api.txt` is the API-only profile used by Docker, core development and audits. Default `backend/requirements.txt` adds Gradio/Spaces so the entire backend folder can be uploaded directly to a Gradio Space. `requirements-gradio.txt` is an alias for that full profile. The documented Gradio/Pillow advisory constraint applies to the full profile; primary API Docker images exclude it.
+`backend/requirements-api.txt` is the API-only profile used by Docker, core development and audits. Default `backend/requirements.txt` adds Gradio/Spaces so the entire backend folder can be uploaded directly to a Gradio Space. `requirements-gradio.txt` is an alias for that full profile. The full profile requires Gradio >=6.32 and Pillow >=13, resolving the earlier incompatible Pillow security bound; primary API Docker images still exclude the optional UI.
 
-The installed 98-package API closure audited clean after security updates to AnyIO, filelock, setuptools and urllib3; reproduce using `python scripts/audit_core.py`. This is an installed Windows environment result, not an unbuilt Linux image result.
+Use a virtual environment created without `--system-site-packages`. `scripts/audit_core.py` rejects inherited site packages, checks installed requirement ranges, includes auto-detected optional HTTP decoders, and audits the complete selected dependency closure. Run `python scripts/audit_core.py` for the API or add `--profile full` for Gradio/Spaces. The remediation environment audited 118 full-profile packages with no reported advisories or skipped records; this is a Windows snapshot, not a built Linux image audit. CPU Torch wheels are checked against the upstream release version used by advisory databases.
 
-Python requirements have reviewed major bounds but are not a fully locked transitive environment. Before release, resolve/audit an exact target-platform environment and preserve its lock/SBOM/image digest. Run `pip-audit` there and `npm audit --omit=dev` for frontend runtime dependencies. A developer environment containing optional packages is not the release image. Earlier development-tool advisories remain recorded in the project documentation.
+Python requirements have reviewed major bounds but are not a fully locked transitive environment. Before release, resolve/audit an exact target-platform environment and preserve its lock/SBOM/image digest. Run `pip-audit` there and `npm audit` for frontend runtime and build dependencies. A developer environment containing optional packages is not the release image. Earlier development-tool advisories remain recorded in the project documentation.
 
 ## Defaults
 
