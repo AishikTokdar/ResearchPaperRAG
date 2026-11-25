@@ -366,27 +366,28 @@ def benchmark_pillar_3_evidence_fitting(iterations: int = 100) -> tuple[dict[str
 # ---------------------------------------------------------------------------
 
 def benchmark_pillar_4_grounding(iterations: int = 200) -> tuple[dict[str, float], dict[str, float], float, float]:
-    """Benchmark factual verification and numerical claim extraction."""
+    """Benchmark factual verification, extractive entailment, and numerical claim audit."""
     docs = generate_synthetic_documents(count=10)
     citations = {f"E{i}": f"[Paper {i}]" for i in range(1, 11)}
 
     report_text = """
 ## 1. Literature Summary
-In this research synthesis, we examine recent breakthroughs in transformer scaling [E1]. The initial baseline achieved 78.2% accuracy [E1], while hybrid retrieval improved performance to 94.2% [E2]. Furthermore, convergence accelerated by 3.8x when using 64 batch samples [E3].
+In this study on quantum computing error mitigation in superconducting qubits, we evaluate system parameters [E1]. The experimental pipeline achieves an accuracy of 78.2% on test split 0 [E1]. Prior methods achieved only 63.1% under identical evaluation conditions [E2].
 
 ## 2. Trend Detection
-Empirical evaluation demonstrates consistent gains across all test splits [E4]. Specifically, parameter scaling from 1000 to 5000 parameters yielded an 18.5% gain in precision [E5]. No contradictions were observed across identical benchmarks [E6].
+We observe that convergence rate scales logarithmically with parameter count N=3000 [E3]. Hyperparameters include learning rate 0.004, batch size 64, and weight decay 1e-4 [E4].
 
 ## 3. Common Methods
-All evaluated architectures utilized AdamW optimizer with learning rate 0.001 and weight decay 1e-4 [E7].
+The experimental pipeline achieves an accuracy of 82.2% on test split 4 [E5]. Hyperparameters include learning rate 0.007, batch size 64, and weight decay 1e-4 [E7].
 """
 
-    # Baseline: Uncompiled regexes and no digit fast-path
+    num_pat = r"(?<![\w.])([+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)(\s*%|\s+percent\b)?(?!\w|\.\d)"
+
+    # Baseline: Uncompiled regexes, no digit fast-path, uncached support text & doc sentence splitting
     def baseline_numbers(text: str) -> set[str]:
         text = re.sub(r"https?://\S+", "", text).replace("−", "-")
         result = set()
-        pattern = r"(?<![\w.])([+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)(\s*%|\s+percent\b)?(?!\w|\.\d)"
-        for match in re.finditer(pattern, text, re.I):
+        for match in re.finditer(num_pat, text, re.I):
             try:
                 num = Decimal(match[1].replace(",", ""))
                 exp = num.as_tuple().exponent
@@ -400,6 +401,33 @@ All evaluated architectures utilized AdamW optimizer with learning rate 0.001 an
                 val = match[1]
             result.add(val + ("%" if match[2] else ""))
         return result
+
+    def baseline_support_text(text: str) -> str:
+        text = unicodedata.normalize("NFKC", text).replace("−", "-")
+        text = re.sub(num_pat, lambda m: " " + next(iter(baseline_numbers(m[0])), m[0]) + " ", text, flags=re.I)
+        text = re.sub(r"[*`\"“”‘’]", "", text)
+        return " ".join(text.split()).strip(" .!?;:—–•|>")
+
+    def baseline_supported_claims(prose: str, refs: list[str], d_list: list[Document]) -> bool:
+        text = re.sub(r"(?m)^\s*(?:[-*•]\s+)?(?:\d+[.)]\s+|\(\d+\)\s+)", "", prose)
+        text = re.sub(r"([.!?])\s+(\[E\d+\](?:\s*\[E\d+\])*)", r" \2\1", text)
+        pieces = [p for p in re.split(r"(?<=[.!?])\s+|\n+", text) if p.strip(" |")]
+        for piece in pieces:
+            own_refs = re.findall(r"\[(E\d+)\]", piece)
+            if not own_refs or set(own_refs) - set(refs):
+                return False
+            selected = [d_list[int(r[1:]) - 1] for r in dict.fromkeys(own_refs) if 0 < int(r[1:]) <= len(d_list)]
+            source_sentences = {
+                baseline_support_text(sent)
+                for doc in selected
+                if doc.metadata.get("evidence_scope") != "metadata_only"
+                for sent in re.split(r"(?<=[.!?])\s+|\n+", doc.page_content)
+                if sent.strip()
+            }
+            claims = [baseline_support_text(cell) for cell in re.sub(r"\[E\d+\]", "", piece).split("|") if baseline_support_text(cell)]
+            if not claims or any(c not in source_sentences for c in claims):
+                return False
+        return bool(pieces)
 
     def baseline_resolve(ans: str, cits: dict[str, str]) -> str:
         ans = ans.replace("【", "[").replace("】", "]")
@@ -459,6 +487,8 @@ All evaluated architectures utilized AdamW optimizer with learning rate 0.001 an
             src = " ".join(evidence_dict.get(ref, "") for ref in refs)
             if baseline_numbers(claim) - baseline_numbers(src):
                 pass
+            if not baseline_supported_claims(prose, refs, d_list):
+                pass
             kept.append(block)
         return baseline_resolve("".join(kept), cits)
 
@@ -466,6 +496,7 @@ All evaluated architectures utilized AdamW optimizer with learning rate 0.001 an
         return baseline_ground(report_text, citations, docs)
 
     def optimized_fn():
+        evidence._support_text.cache_clear()
         return evidence.ground_answer(
             report_text,
             citations=citations,
